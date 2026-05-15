@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriLog - Control Local</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-6 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-slate-900">NutriLog</h1>
+                <p class="text-sm text-slate-500">Control nutricional privado y portátil</p>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button onclick="exportarCSV()" class="flex-1 sm:flex-none bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 px-6 rounded-xl transition cursor-pointer text-center text-sm">
+                    Exportar CSV
+                </button>
+                <button onclick="limpiarTodo()" class="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 px-4 rounded-xl transition cursor-pointer text-sm">
+                    Limpiar
+                </button>
+            </div>
+        </header>
+
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-lg font-semibold mb-4 text-slate-700">Registrar Consumo</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="text" id="alimento" placeholder="Nombre del alimento" class="bg-slate-50 border border-slate-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition">
+                <input type="number" id="calorias" placeholder="Calorías (kcal)" class="bg-slate-50 border border-slate-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition">
+                <button onclick="agregarEntrada()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-md">
+                    + Añadir
+                </button>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="p-4 text-sm font-semibold text-slate-600 border-b">Fecha</th>
+                            <th class="p-4 text-sm font-semibold text-slate-600 border-b">Alimento</th>
+                            <th class="p-4 text-sm font-semibold text-slate-600 border-b text-right">Calorías</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-cuerpo">
+                        </tbody>
+                    <tfoot class="bg-slate-50 font-bold">
+                        <tr>
+                            <td colspan="2" class="p-4 text-slate-700 text-right">Total Diario:</td>
+                            <td id="total-calorias" class="p-4 text-right text-blue-600">0 kcal</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // Cargar datos al iniciar
+        let registros = JSON.parse(localStorage.getItem('nutrilog_datos')) || [];
+        actualizarTabla();
+
+        function agregarEntrada() {
+            const alimento = document.getElementById('alimento').value;
+            const calorias = document.getElementById('calorias').value;
+            const fecha = new Date().toLocaleDateString();
+
+            if (alimento === "" || calorias === "") {
+                alert("Por favor completa los campos");
+                return;
+            }
+
+            const nuevaEntrada = { fecha, alimento, calorias: parseInt(calorias) };
+            registros.push(nuevaEntrada);
+            
+            // Guardar en memoria local (no se borra al cerrar)
+            localStorage.setItem('nutrilog_datos', JSON.stringify(registros));
+            
+            // Limpiar inputs y actualizar
+            document.getElementById('alimento').value = "";
+            document.getElementById('calorias').value = "";
+            actualizarTabla();
+        }
+
+        function actualizarTabla() {
+            const cuerpo = document.getElementById('tabla-cuerpo');
+            const totalElemento = document.getElementById('total-calorias');
+            cuerpo.innerHTML = "";
+            let total = 0;
+
+            registros.forEach((entry) => {
+                total += entry.calorias;
+                const fila = `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-4 text-sm text-slate-500 border-b">${entry.fecha}</td>
+                        <td class="p-4 text-sm font-medium text-slate-700 border-b">${entry.alimento}</td>
+                        <td class="p-4 text-sm text-right text-slate-600 border-b">${entry.calorias} kcal</td>
+                    </tr>
+                `;
+                cuerpo.innerHTML += fila;
+            });
+
+            totalElemento.innerText = total + " kcal";
+        }
+
+        function exportarCSV() {
+            if (registros.length === 0) {
+                alert("No hay datos para exportar");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,Fecha,Alimento,Calorias\n";
+            registros.forEach(row => {
+                csvContent += `${row.fecha},${row.alimento},${row.calorias}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "mi_nutricion.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function limpiarTodo() {
+            if (confirm("¿Estás seguro de borrar todos los datos?")) {
+                registros = [];
+                localStorage.removeItem('nutrilog_datos');
+                actualizarTabla();
+            }
+        }
+    </script>
+</body>
+</html>
