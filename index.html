@@ -3,257 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NutriLog Pro - Dashboard de Biometría y Porciones</title>
+    <title>NutriLog Pro - Bio-Tracking</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; transition: all 0.3s ease; }
+
         :root {
-            --primary: #2563eb;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --water: #3b82f6;
+            --accent-color: #2563eb;
+            --accent-border: #2563eb;
         }
 
-        body { 
-            font-family: 'Inter', sans-serif; 
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: contain;
-        }
+        /* Colores Tiempos de Comida Solicitados */
+        .meal-desayuno { background-color: #7c3aed; } /* Morado */
+        .meal-almuerzo { background-color: #7f1d1d; } /* Rojo Vino */
+        .meal-cena { background-color: #64748b; }     /* Gris */
+        .meal-snack { background-color: #4b2c20; }    /* Chocolate */
 
-        .progress-transition { transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .meal-btn { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); filter: grayscale(0.4) opacity(0.7); color: white; font-weight: 800; }
+        .meal-btn.active { filter: grayscale(0) opacity(1); transform: scale(1.05); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2); }
+
+        .dynamic-border { 
+            border: 4px solid var(--accent-border) !important; 
+            transition: border-color 0.4s ease;
+        }
         
-        .animate-entry { animation: slideIn 0.3s ease-out forwards; }
-        @keyframes slideIn {
-            from { transform: translateY(15px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        .progress-transition { transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-entry { animation: slideIn 0.4s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Guía visual: Titileo de campos vacíos */
+        .pulse-guide { animation: pulseBorder 2s infinite; }
+        @keyframes pulseBorder {
+            0% { box-shadow: 0 0 0 0px rgba(var(--accent-rgb, 37, 99, 235), 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(var(--accent-rgb, 37, 99, 235), 0); }
+            100% { box-shadow: 0 0 0 0px rgba(var(--accent-rgb, 37, 99, 235), 0); }
         }
 
-        .week-btn {
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            cursor: pointer;
-            border: 3px solid white;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-        .week-btn.active {
-            transform: scale(1.2);
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
-        }
+        .week-btn { transition: all 0.3s ease; border: 4px solid white; cursor: pointer; }
+        .week-btn.active { transform: scale(1.2); box-shadow: 0 0 0 4px rgba(0,0,0,0.1); border-color: #f8fafc; }
 
-        .drop-icon {
-            transition: all 0.4s ease;
-            filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.2));
-        }
-        .drop-active { color: #3b82f6; transform: scale(1.1); }
-        .drop-empty { color: #e2e8f0; }
-
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-
-        /* Sugerencias de búsqueda */
-        #search-results {
-            max-height: 250px;
-            overflow-y: auto;
-            z-index: 50;
-        }
+        #search-results { max-height: 300px; overflow-y: auto; z-index: 60; }
+        
+        /* Ocultar scrollbar pero mantener funcionalidad */
+        #search-results::-webkit-scrollbar { width: 4px; }
+        #search-results::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen selection:bg-blue-100">
 
     <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md pointer-events-none flex flex-col gap-2"></div>
 
-    <!-- Confirm Modal -->
-    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-[2.5rem] max-w-sm w-full p-8 shadow-2xl animate-entry text-center border border-slate-100">
-            <div class="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <i class="fa-solid fa-trash-can text-3xl"></i>
-            </div>
-            <h3 class="text-2xl font-bold text-slate-900 mb-3">¿Limpiar datos?</h3>
-            <p class="text-slate-500 mb-8">Esta acción borrará alimentos y consumo de agua de hoy.</p>
-            <div class="flex flex-col sm:flex-row gap-3">
-                <button onclick="closeConfirmModal()" class="flex-1 px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl">Cancelar</button>
-                <button id="modal-confirm-btn" class="flex-1 px-6 py-4 bg-red-500 text-white font-bold rounded-2xl shadow-lg shadow-red-100">Sí, borrar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Import Modal -->
-    <div id="import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-[2.5rem] max-w-2xl w-full p-6 md:p-8 shadow-2xl animate-entry flex flex-col">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-slate-900 tracking-tight">Importar Reporte</h3>
-                <button onclick="closeImportModal()" class="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <textarea id="import-text" class="flex-1 w-full min-h-[200px] bg-slate-50 border border-slate-100 rounded-3xl p-6 text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-6" placeholder="Pega el mensaje de WhatsApp aquí..."></textarea>
-            <button onclick="procesarTextoImportado()" class="w-full px-6 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-100">PROCESAR AHORA</button>
-        </div>
-    </div>
-
     <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        
-        <header class="flex flex-col lg:flex-row justify-between items-center bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 gap-6">
-            <div class="flex items-center gap-4 self-start lg:self-center">
-                <div id="brand-icon" class="w-14 h-14 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500">
+        <!-- Encabezado Principal -->
+        <header id="main-header" class="flex flex-col lg:flex-row justify-between items-center bg-white p-6 rounded-[2.5rem] shadow-sm border-2 border-slate-100 gap-6 transition-all duration-500">
+            <div class="flex items-center gap-4">
+                <div id="brand-icon" class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500">
                     <i class="fa-solid fa-bolt"></i>
                 </div>
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-black tracking-tighter text-slate-900">NutriLog <span id="brand-badge" class="text-blue-600 font-extrabold text-xs md:text-sm uppercase px-3 py-1 bg-blue-50 rounded-full ml-1">PRO</span></h1>
-                    <p class="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-[0.2em]">Bio-Tracking Engine</p>
+                    <h1 class="text-2xl font-black tracking-tighter text-slate-900">NutriLog <span id="pro-badge" class="text-white bg-blue-600 px-2 py-0.5 rounded-lg text-sm ml-1 transition-colors">PRO</span></h1>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Bio-Tracking Engine</p>
                 </div>
             </div>
             <div class="grid grid-cols-3 gap-2 w-full lg:w-auto">
-                <button onclick="abrirImportModal()" class="flex flex-col items-center justify-center gap-1 p-3 bg-slate-50 text-slate-600 font-bold rounded-2xl text-[10px] active:scale-95 transition">
-                    <i class="fa-solid fa-file-import text-lg"></i> IMPORTAR
+                <button onclick="abrirImportModal()" class="flex flex-col items-center p-3 bg-slate-50 text-slate-600 font-bold rounded-2xl text-[10px] active:scale-95 transition hover:bg-slate-100">
+                    <i class="fa-solid fa-file-import text-lg mb-1"></i> IMPORTAR
                 </button>
-                <button onclick="compartirReporte()" class="flex flex-col items-center justify-center gap-1 p-3 bg-emerald-600 text-white font-bold rounded-2xl text-[10px] shadow-lg shadow-emerald-100 active:scale-95 transition">
-                    <i class="fa-solid fa-share-nodes text-lg"></i> COMPARTIR
+                <button onclick="compartirReporte()" class="flex flex-col items-center p-3 bg-emerald-600 text-white font-bold rounded-2xl text-[10px] shadow-lg shadow-emerald-100 active:scale-95 transition hover:bg-emerald-700">
+                    <i class="fa-solid fa-share-nodes text-lg mb-1"></i> COMPARTIR
                 </button>
-                <button onclick="solicitarLimpieza()" class="flex flex-col items-center justify-center gap-1 p-3 bg-red-50 text-red-500 font-bold rounded-2xl text-[10px] active:scale-95 transition">
-                    <i class="fa-solid fa-trash-can text-lg"></i> LIMPIAR
+                <button onclick="solicitarLimpieza()" class="flex flex-col items-center p-3 bg-red-50 text-red-500 font-bold rounded-2xl text-[10px] active:scale-95 transition hover:bg-red-100">
+                    <i class="fa-solid fa-trash-can text-lg mb-1"></i> LIMPIAR
                 </button>
             </div>
         </header>
 
         <main class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
+            <!-- Columna Izquierda: Perfil e Hidratación -->
             <aside class="lg:col-span-4 space-y-6">
-                <!-- Perfil -->
-                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                <div id="profile-card" class="bg-white p-6 rounded-[2.5rem] border-2 border-slate-100 shadow-sm transition-all duration-500">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-400">Perfil Biométrico</h3>
+                        <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest italic">Biometría</h3>
                         <span id="bmi-badge" class="px-3 py-1 rounded-full bg-slate-50 text-slate-400 text-[10px] font-bold">IMC: --</span>
                     </div>
-                    
                     <div class="space-y-4">
-                        <div class="bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
-                            <label class="text-[9px] font-black uppercase text-slate-400 block mb-4 text-center tracking-widest">Semana del Ciclo</label>
-                            <div class="flex justify-between items-center px-4">
+                        <div id="week-selector-container" class="bg-slate-50/50 p-4 rounded-3xl border border-slate-100 pulse-guide">
+                            <label class="text-[9px] font-black uppercase text-slate-400 block mb-3 text-center tracking-widest italic">Semana del Mes (Obligatorio)</label>
+                            <div class="flex justify-between px-2">
                                 <button onclick="seleccionarSemana('Azul')" id="week-Azul" class="week-btn w-10 h-10 rounded-full bg-blue-500"></button>
                                 <button onclick="seleccionarSemana('Rojo')" id="week-Rojo" class="week-btn w-10 h-10 rounded-full bg-red-500"></button>
                                 <button onclick="seleccionarSemana('Yellow')" id="week-Yellow" class="week-btn w-10 h-10 rounded-full bg-yellow-400"></button>
                                 <button onclick="seleccionarSemana('Black')" id="week-Black" class="week-btn w-10 h-10 rounded-full bg-black"></button>
                             </div>
                         </div>
-
-                        <input type="text" id="user-name" onchange="guardarPerfil()" placeholder="Nombre" class="w-full bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 p-4 rounded-2xl outline-none font-bold text-slate-700 transition-all">
-                        
+                        <input type="text" id="user-name" oninput="validarGuia(this)" placeholder="Nombre completo" class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-slate-700 border-2 border-transparent pulse-guide">
                         <div class="grid grid-cols-2 gap-3">
                             <div class="relative">
-                                <input type="number" id="user-weight" onchange="guardarPerfil()" placeholder="Peso" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
+                                <input type="number" id="user-weight" oninput="validarGuia(this)" placeholder="Peso" class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-center border-2 border-transparent pulse-guide">
                                 <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-black">KG</span>
                             </div>
                             <div class="relative">
-                                <input type="number" id="user-height" onchange="guardarPerfil()" placeholder="Alt" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
+                                <input type="number" id="user-height" oninput="validarGuia(this)" placeholder="Alt" class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-center border-2 border-transparent pulse-guide">
                                 <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-black">CM</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Hidratación -->
-                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden bg-gradient-to-br from-white to-blue-50/30">
+                <div id="water-card" class="bg-white p-6 rounded-[2.5rem] border-2 border-slate-100 shadow-sm transition-all duration-500">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-xs font-black uppercase tracking-widest text-blue-500">Hidratación</h3>
-                        <div class="flex items-center bg-blue-50 p-1 rounded-xl">
-                            <button onclick="setWaterUnit('ml')" id="unit-ml" class="px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition">ML</button>
-                            <button onclick="setWaterUnit('L')" id="unit-L" class="px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition">L</button>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col items-center mb-6">
-                        <div class="flex flex-wrap justify-center gap-2 mb-4" id="water-drops-container"></div>
-                        <div class="text-center">
-                            <span id="water-current" class="text-4xl font-black text-blue-600">0</span>
-                            <span id="water-unit-display" class="text-blue-300 font-bold ml-1">ml</span>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <input type="number" id="water-input" placeholder="Cantidad" class="w-full bg-blue-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-blue-600">
-                        <button onclick="addWater()" class="bg-blue-600 text-white font-black rounded-2xl active:scale-95 transition shadow-lg shadow-blue-100">
-                            + AÑADIR
+                        <h3 class="text-xs font-black uppercase tracking-widest text-blue-500 italic">Hidratación</h3>
+                        <button onclick="clearWater()" class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 transition">
+                            <i class="fa-solid fa-trash-can text-sm"></i>
                         </button>
                     </div>
-                </div>
-                
-                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative">
-                    <h2 class="text-xl font-bold mb-6 flex items-center gap-3">
-                        <span class="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-sm"><i class="fa-solid fa-plus"></i></span>
-                        Alimento
-                    </h2>
-                    <div class="space-y-4">
-                        <div class="relative">
-                            <input type="text" id="alimento" oninput="buscarCatalogo(this.value)" placeholder="¿Qué comiste?" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none focus:bg-white transition-all font-medium" autocomplete="off">
-                            <!-- Lista de sugerencias dinámica -->
-                            <div id="search-results" class="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 hidden z-50 overflow-hidden"></div>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-3">
-                            <input type="number" id="cantidad-alimento" placeholder="Cantidad" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-slate-600">
-                            <select id="unidad-alimento" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-slate-600 appearance-none">
-                                <option value="Unidad">Unidad</option>
-                                <option value="Gramos">Gramos (g)</option>
-                                <option value="Onzas">Onzas (oz)</option>
-                                <option value="Slides">Slides (reb)</option>
-                                <option value="Liquid">Líquido (ml)</option>
-                            </select>
-                        </div>
+                    
+                    <div class="w-full bg-blue-100/50 h-6 rounded-full overflow-hidden mb-4 p-1 border border-blue-50">
+                        <div id="water-progress-bar" class="h-full bg-blue-500 rounded-full progress-transition shadow-sm" style="width: 0%"></div>
+                    </div>
+                    <div class="text-center mb-6">
+                        <span id="water-current" class="text-4xl font-black text-blue-600">0</span>
+                        <span id="water-unit-display" class="text-blue-300 font-bold ml-1 uppercase text-xs">ml</span>
+                    </div>
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <input type="number" id="calorias" placeholder="Calorías" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
-                            <input type="number" id="proteinas" placeholder="Prot (g)" class="w-full bg-emerald-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-emerald-600">
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setWaterUnit('ml')" id="unit-ml" class="unit-btn py-2 text-[10px] font-black rounded-xl bg-blue-600 text-white transition">ML</button>
+                            <button onclick="setWaterUnit('L')" id="unit-L" class="unit-btn py-2 text-[10px] font-black rounded-xl bg-slate-100 text-slate-400 transition">L</button>
+                            <button onclick="setWaterUnit('oz')" id="unit-oz" class="unit-btn py-2 text-[10px] font-black rounded-xl bg-slate-100 text-slate-400 transition">OZ</button>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
-                            <input type="number" id="carbs" placeholder="Carb (g)" class="w-full bg-amber-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-amber-600">
-                            <input type="number" id="grasas" placeholder="Grasa (g)" class="w-full bg-rose-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-rose-600">
+                            <input type="number" id="water-input" oninput="validarGuia(this)" placeholder="Cant." class="w-full bg-white border border-blue-100 p-4 rounded-2xl outline-none font-bold text-center text-blue-600 pulse-guide">
+                            <button onclick="addWater()" class="bg-blue-600 text-white font-black rounded-2xl active:scale-95 transition shadow-lg shadow-blue-100 italic">+ AÑADIR</button>
                         </div>
-                        <button onclick="agregarEntrada()" class="w-full bg-slate-900 text-white font-black py-5 rounded-[1.5rem] shadow-xl active:scale-95 transition-all">
-                            GUARDAR REGISTRO
-                        </button>
                     </div>
                 </div>
             </aside>
 
             <section class="lg:col-span-8 space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                        <div class="flex justify-between items-start mb-6">
-                            <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Calorías Totales</p>
-                                <div class="flex items-baseline gap-2">
-                                    <span id="txt-progreso" class="text-6xl font-black text-slate-900 tracking-tighter">0</span>
-                                    <span class="text-slate-300 font-bold text-xl">/ 2000</span>
-                                </div>
+                <!-- Registro de Alimentos -->
+                <div id="log-card" class="bg-white p-6 md:p-8 rounded-[2.5rem] border-2 border-slate-100 shadow-sm transition-all duration-500">
+                    <h2 class="text-xl font-bold mb-6 flex items-center gap-3 italic text-slate-800">
+                        <span id="plus-icon-bg" class="w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs"><i class="fa-solid fa-plus"></i></span>
+                        ¿Qué comiste hoy?
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Tiempos de Comida -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                            <button onclick="selectMeal('Desayuno')" id="meal-Desayuno" class="meal-btn meal-desayuno py-3 rounded-2xl text-[10px] uppercase active">Desayuno</button>
+                            <button onclick="selectMeal('Almuerzo')" id="meal-Almuerzo" class="meal-btn meal-almuerzo py-3 rounded-2xl text-[10px] uppercase">Almuerzo</button>
+                            <button onclick="selectMeal('Cena')" id="meal-Cena" class="meal-btn meal-cena py-3 rounded-2xl text-[10px] uppercase">Cena</button>
+                            <button onclick="selectMeal('Snack')" id="meal-Snack" class="meal-btn meal-snack py-3 rounded-2xl text-[10px] uppercase">Snack</button>
+                        </div>
+
+                        <!-- Buscador con Catálogo -->
+                        <div class="relative">
+                            <input type="text" id="alimento" oninput="buscarCatalogo(this.value); validarGuia(this)" placeholder="Busca en el catálogo (Legumbres, Pastas, Carnes...)" class="w-full bg-slate-50 p-5 rounded-3xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all font-bold text-slate-700 border-2 border-transparent pulse-guide" autocomplete="off">
+                            <div id="search-results" class="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 hidden z-50"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="number" id="cantidad-alimento" placeholder="Cant." class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-center">
+                                <select id="unidad-alimento" class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-slate-500 appearance-none text-center">
+                                    <option value="Unidad">Unidad</option>
+                                    <option value="Gramos">Gramos (g)</option>
+                                    <option value="Onzas">Onzas (oz)</option>
+                                    <option value="Slides">Slides (reb)</option>
+                                    <option value="Liquid">Líquido (ml)</option>
+                                </select>
                             </div>
-                            <div id="porcentaje" class="text-lg font-black text-blue-600 bg-blue-50 px-4 py-2 rounded-2xl">0%</div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="number" id="calorias" oninput="validarGuia(this)" placeholder="Kcal" class="w-full bg-slate-50 p-4 rounded-2xl outline-none font-bold text-center pulse-guide">
+                                <input type="number" id="proteinas" placeholder="Prot (g)" class="w-full bg-emerald-50/50 p-4 rounded-2xl outline-none font-bold text-center text-emerald-600">
+                            </div>
+                        </div>
+                        <button id="main-save-btn" onclick="agregarEntrada()" class="w-full bg-slate-900 text-white font-black py-5 rounded-3xl shadow-2xl active:scale-[0.98] transition-all tracking-widest italic uppercase">GUARDAR REGISTRO</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div id="energy-card" class="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 shadow-sm relative overflow-hidden transition-all duration-500">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Energía Diaria</p>
+                        <div class="flex items-baseline gap-2 mb-4">
+                            <span id="txt-progreso" class="text-6xl font-black text-slate-900 tracking-tighter">0</span>
+                            <span class="text-slate-300 font-bold text-xl">/ 2000</span>
                         </div>
                         <div class="w-full bg-slate-100 h-8 rounded-full overflow-hidden p-1.5">
                             <div id="barra-progreso" class="h-full bg-blue-600 rounded-full progress-transition" style="width: 0%"></div>
                         </div>
                     </div>
 
-                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
+                    <div id="macros-card" class="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 shadow-sm flex items-center justify-between transition-all duration-500">
                         <div class="w-32 h-32 md:w-40 md:h-40 relative">
                             <canvas id="macroChart"></canvas>
                         </div>
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Proteínas</span></div>
-                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Carbos</span></div>
-                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-rose-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Grasas</span></div>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-[9px] font-bold text-slate-500 uppercase">Proteína</span></div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-[9px] font-bold text-slate-500 uppercase">Carbos</span></div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-rose-500"></span><span class="text-[9px] font-bold text-slate-500 uppercase">Grasas</span></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Historial -->
-                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-                    <div class="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-                        <h3 class="font-black text-slate-800 text-sm uppercase tracking-widest">Registros de Hoy</h3>
-                        <span id="items-count" class="text-[10px] font-black bg-white border border-slate-100 text-slate-400 px-4 py-2 rounded-full">0 Items</span>
+                <!-- Historial Cronológico -->
+                <div id="history-card" class="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-sm overflow-hidden transition-all duration-500">
+                    <div class="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                        <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest italic">Línea de Tiempo</h3>
+                        <span id="items-count" class="text-[9px] font-black bg-white border border-slate-100 text-slate-400 px-3 py-1.5 rounded-full">0 ITEMS</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
@@ -261,167 +223,305 @@
                         </table>
                     </div>
                     <div id="empty-state" class="py-20 text-center flex flex-col items-center gap-4">
-                        <i class="fa-solid fa-utensils text-slate-200 text-3xl"></i>
-                        <p class="text-slate-300 font-medium italic">Sin registros para hoy</p>
+                        <i class="fa-solid fa-cookie-bite text-slate-100 text-5xl"></i>
+                        <p class="text-slate-300 font-medium italic">Sin registros previos</p>
                     </div>
                 </div>
             </section>
         </main>
     </div>
 
+    <!-- Modales -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] max-w-sm w-full p-8 shadow-2xl animate-entry text-center border-4 border-red-100">
+            <h3 class="text-2xl font-bold text-slate-900 mb-2">¿Confirmar Acción?</h3>
+            <p id="modal-desc" class="text-slate-500 mb-8 text-sm">Esta acción es permanente.</p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirmModal()" class="flex-1 px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl">No</button>
+                <button id="modal-confirm-btn" class="flex-1 px-6 py-4 bg-red-500 text-white font-bold rounded-2xl">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] max-w-2xl w-full p-8 shadow-2xl animate-entry flex flex-col border-4 border-blue-100">
+            <h3 class="text-2xl font-bold text-slate-900 mb-4">Importación Inteligente</h3>
+            <p class="text-xs text-slate-400 mb-4 italic">Pega tu reporte de WhatsApp aquí. El sistema detectará fechas, semanas y macros automáticamente.</p>
+            <textarea id="import-text" class="flex-1 w-full min-h-[250px] bg-slate-50 rounded-3xl p-6 text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-6" placeholder="Pega el mensaje aquí..."></textarea>
+            <div class="flex gap-3">
+                <button onclick="closeImportModal()" class="flex-1 px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl">Cancelar</button>
+                <button onclick="procesarTextoImportado()" class="flex-1 px-6 py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl">PROCESAR</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // CATÁLOGO COMPLETO BASADO EN LA PIRÁMIDE ALIMENTICIA
         const CATALOGO = [
-            { nombre: "Arroz integral cocido (100g)", calorias: 112 },
-            { nombre: "Arroz blanco cocido (100g)", calorias: 130 },
-            { nombre: "Avena en hojuelas (50g)", calorias: 194 },
-            { nombre: "Pan integral (1 rebanada)", calorias: 75 },
-            { nombre: "Pasta de trigo cocida (100g)", calorias: 131 },
-            { nombre: "Patata / Papa cocida (100g)", calorias: 87 },
-            { nombre: "Quinoa cocida (100g)", calorias: 120 },
-            { nombre: "Maíz dulce en grano (100g)", calorias: 86 },
-            { nombre: "Espinacas crudas (100g)", calorias: 23 },
-            { nombre: "Brócoli cocido (100g)", calorias: 35 },
-            { nombre: "Tomate crudo (100g)", calorias: 18 },
-            { nombre: "Zanahoria cruda (100g)", calorias: 41 },
-            { nombre: "Lechuga romana (100g)", calorias: 17 },
-            { nombre: "Manzana mediana (1 ud)", calorias: 52 },
-            { nombre: "Plátano / Banana (1 ud)", calorias: 89 },
-            { nombre: "Naranja mediana (1 ud)", calorias: 62 },
-            { nombre: "Fresas / Frutillas (100g)", calorias: 32 },
-            { nombre: "Kiwi (1 ud)", calorias: 61 },
-            { nombre: "Aguacate / Palta (100g)", calorias: 160 },
-            { nombre: "Leche entera (1 taza 240ml)", calorias: 149 },
-            { nombre: "Leche desnatada/descremada (240ml)", calorias: 83 },
-            { nombre: "Yogur natural entero (100g)", calorias: 61 },
-            { nombre: "Queso fresco tipo Burgos (100g)", calorias: 100 },
-            { nombre: "Queso Mozzarella (50g)", calorias: 140 },
-            { nombre: "Pechuga de Pollo a la plancha (100g)", calorias: 165 },
-            { nombre: "Carne de Res magra (100g)", calorias: 250 },
-            { nombre: "Filete de Cerdo (100g)", calorias: 143 },
-            { nombre: "Salmón a la plancha (100g)", calorias: 208 },
-            { nombre: "Atún en agua enlatado (100g)", calorias: 116 },
-            { nombre: "Huevo entero cocido (1 ud)", calorias: 78 },
-            { nombre: "Lentejas cocidas (100g)", calorias: 116 },
-            { nombre: "Garbanzos cocidos (100g)", calorias: 164 },
-            { nombre: "Aceite de Oliva (1 cucharada)", calorias: 119 },
-            { nombre: "Almendras (un puñado - 30g)", calorias: 173 },
-            { nombre: "Nueces (un puñado - 30g)", calorias: 196 },
-            { nombre: "Azúcar blanco (1 cucharadita)", calorias: 16 },
-            { nombre: "Chocolate negro 70% (20g)", calorias: 120 },
-            { nombre: "Galletas María (4 unidades)", calorias: 100 }
+            // --- LEGUMBRES EE. UU. ---
+            { nombre: "Alubias Great Northern cocidas (100g)", calorias: 139, vitC: 0.0, potasio: 411 },
+            { nombre: "Alubias Kidney / Rojas cocidas (100g)", calorias: 127, vitC: 0.0, potasio: 405 },
+            { nombre: "Alubias Navy / Blancas cocidas (100g)", calorias: 140, vitC: 0.0, potasio: 379 },
+            { nombre: "Frijoles de carita / Black-eyed peas (100g)", calorias: 116, vitC: 0.4, potasio: 278 },
+            { nombre: "Frijoles negros / Black beans (100g)", calorias: 132, vitC: 0.0, potasio: 355 },
+            { nombre: "Frijoles pinto cocidos (100g)", calorias: 143, vitC: 0.0, potasio: 436 },
+            { nombre: "Garbanzos / Chickpeas cocidos (100g)", calorias: 164, vitC: 1.3, potasio: 291 },
+            { nombre: "Guisantes partidos / Split peas (100g)", calorias: 118, vitC: 0.4, potasio: 262 },
+            { nombre: "Habas de Lima / Lima beans (100g)", calorias: 115, vitC: 0.0, potasio: 508 },
+            { nombre: "Lentejas / Lentils cocidas (100g)", calorias: 116, vitC: 1.5, potasio: 369 },
+            { nombre: "Soja / Soya cocida (100g)", calorias: 173, vitC: 1.7, potasio: 515 },
+
+            // --- LÁCTEOS, JUGOS Y REFRESCOS ---
+            { nombre: "Cottage Cheese (100g)", calorias: 98, vitC: 0.0, potasio: 104 },
+            { nombre: "Greek Yogurt natural (100g)", calorias: 59, vitC: 0.0, potasio: 141 },
+            { nombre: "Half and Half para café (2 cdas / 30ml)", calorias: 40, vitC: 0.0, potasio: 40 },
+            { nombre: "Heavy Whipping Cream (1 cda / 15ml)", calorias: 50, vitC: 0.0, potasio: 10 },
+            { nombre: "Leche Descremada / Skim Milk (1 taza / 240ml)", calorias: 83, vitC: 0.0, potasio: 382 },
+            { nombre: "Leche Entera / Whole Milk (1 taza / 240ml)", calorias: 149, vitC: 0.0, potasio: 322 },
+            { nombre: "Jugo de Arándano / Cranberry Juice (240ml)", calorias: 116, vitC: 90.0, potasio: 46 },
+            { nombre: "Jugo de Manzana / Apple Juice (240ml)", calorias: 114, vitC: 2.0, potasio: 250 },
+            { nombre: "Jugo de Naranja / Orange Juice (240ml)", calorias: 112, vitC: 124.0, potasio: 496 },
+            { nombre: "Jugo de Uva / Grape Juice (240ml)", calorias: 152, vitC: 0.0, potasio: 263 },
+            { nombre: "Coca-Cola / Pepsi regular (355ml)", calorias: 150, vitC: 0.0, potasio: 10 },
+            { nombre: "Diet Coke / Coke Zero (355ml)", calorias: 0, vitC: 0.0, potasio: 0 },
+            { nombre: "Dr Pepper (355ml)", calorias: 150, vitC: 0.0, potasio: 0 },
+            { nombre: "Sprite / Soda Lima-Limón (355ml)", calorias: 140, vitC: 0.0, potasio: 0 },
+
+            // --- PASTAS ---
+            { nombre: "White Pasta / Pasta blanca (100g cocido)", calorias: 131, vitC: 0.0, potasio: 44 },
+            { nombre: "Whole Wheat Pasta / Integral (100g cocido)", calorias: 124, vitC: 0.0, potasio: 122 },
+            { nombre: "Banza Chickpea Pasta / Garbanzo (100g cocido)", calorias: 160, vitC: 0.0, potasio: 330 },
+            { nombre: "Barilla Protein+ Pasta (100g cocido)", calorias: 150, vitC: 0.0, potasio: 250 },
+            { nombre: "Chef Boyardee Beef Ravioli (1 taza)", calorias: 220, vitC: 2.5, potasio: 320 },
+            { nombre: "Fettuccine Alfredo preparado (1 taza)", calorias: 450, vitC: 0.0, potasio: 110 },
+            { nombre: "Kraft Mac & Cheese (1 taza)", calorias: 350, vitC: 0.0, potasio: 130 },
+            { nombre: "Maruchan Instant Ramen (1 envase)", calorias: 290, vitC: 0.0, potasio: 110 },
+
+            // --- CARNES ---
+            { nombre: "Bacon americano crujiente (3 tiras)", calorias: 130, vitC: 0.0, potasio: 130 },
+            { nombre: "Beef Jerky / Snack (30g)", calorias: 116, vitC: 0.0, potasio: 160 },
+            { nombre: "Chicken Breast / Pechuga (100g)", calorias: 165, vitC: 0.0, potasio: 256 },
+            { nombre: "Chicken Wings / Alitas (100g)", calorias: 203, vitC: 0.0, potasio: 180 },
+            { nombre: "Ground Beef 85/15 / Molida (100g)", calorias: 250, vitC: 0.0, potasio: 318 },
+            { nombre: "Hot Dog / Salchicha de res (1 ud)", calorias: 150, vitC: 0.0, potasio: 70 },
+            { nombre: "Pork Chops / Chuleta (100g)", calorias: 143, vitC: 0.0, potasio: 423 },
+            { nombre: "Ribeye Steak / Corte premium (100g)", calorias: 291, vitC: 0.0, potasio: 270 },
+            { nombre: "Turkey Breast / Pavo Deli (100g)", calorias: 104, vitC: 0.0, potasio: 250 },
+
+            // --- QUESOS ---
+            { nombre: "American Cheese / Procesado (100g)", calorias: 366, vitC: 0.0, potasio: 132 },
+            { nombre: "Cream Cheese estilo Philadelphia (100g)", calorias: 342, vitC: 0.0, potasio: 138 },
+            { nombre: "Sharp Cheddar / Cheddar fuerte (100g)", calorias: 403, vitC: 0.0, potasio: 98 },
+            { nombre: "String Cheese / Queso en tira (1 ud)", calorias: 80, vitC: 0.0, potasio: 26 },
+            { nombre: "Swiss Cheese / Queso suizo (100g)", calorias: 380, vitC: 0.0, potasio: 108 },
+
+            // --- HUEVOS ---
+            { nombre: "Large Whole Egg / Huevo entero (1 ud)", calorias: 74, vitC: 0.0, potasio: 69 },
+            { nombre: "Liquid Egg Whites / Claras (100g)", calorias: 52, vitC: 0.0, potasio: 163 },
+            { nombre: "JUST Egg / Huevo vegetal (100g)", calorias: 70, vitC: 0.0, potasio: 91 },
+
+            // --- CEREALES Y PANES ---
+            { nombre: "Cheerios Original (1 taza)", calorias: 100, vitC: 12.0, potasio: 250 },
+            { nombre: "Cinnamon Toast Crunch (1 taza)", calorias: 170, vitC: 12.0, potasio: 70 },
+            { nombre: "Lucky Charms (1 taza)", calorias: 140, vitC: 12.0, potasio: 80 },
+            { nombre: "Quaker Old Fashioned Oats (1 taza)", calorias: 150, vitC: 0.0, potasio: 150 },
+            { nombre: "White Bread / Pan blanco (1 reb)", calorias: 70, vitC: 0.0, potasio: 26 },
+            { nombre: "Whole Wheat / Pan integral (1 reb)", calorias: 80, vitC: 0.0, potasio: 70 },
+            { nombre: "Plain NY Bagel (1 ud)", calorias: 280, vitC: 0.0, potasio: 100 },
+            { nombre: "Buttermilk Biscuit / Panecillo (1 ud)", calorias: 190, vitC: 0.0, potasio: 70 },
+            { nombre: "Hawaiian Sweet Rolls (1 ud)", calorias: 90, vitC: 0.0, potasio: 25 },
+            { nombre: "Texas Toast (1 reb gruesa)", calorias: 140, vitC: 0.0, potasio: 40 },
+
+            // --- FRUTOS SECOS Y SEMILLAS (28g) ---
+            { nombre: "Almendras / California Almonds (28g)", calorias: 164, vitC: 0.0, potasio: 208 },
+            { nombre: "Nueces / California Walnuts (28g)", calorias: 185, vitC: 0.2, potasio: 125 },
+            { nombre: "Semillas de Chía / Chia Seeds (28g)", calorias: 138, vitC: 0.5, potasio: 115 },
+            { nombre: "Peanuts / Cacahuates tostados (28g)", calorias: 166, vitC: 0.0, potasio: 187 },
+            { nombre: "Pistachos / US Pistachios (28g)", calorias: 159, vitC: 1.4, potasio: 290 }
         ];
 
-        let registros = JSON.parse(localStorage.getItem('nutrilog_v6_data')) || [];
-        let agua = parseInt(localStorage.getItem('nutrilog_v6_water')) || 0;
+        let registros = JSON.parse(localStorage.getItem('nutrilog_pro_data')) || [];
+        let agua = parseInt(localStorage.getItem('nutrilog_final_water')) || 0; 
+        let currentMeal = 'Desayuno';
         let waterUnit = 'ml';
-        let perfil = JSON.parse(localStorage.getItem('nutrilog_v6_perfil')) || { nombre: '', peso: '', altura: '', semana: 'Azul' };
+        let perfil = JSON.parse(localStorage.getItem('nutrilog_final_perfil')) || { nombre: '', peso: '', altura: '', semana: '' };
         let myChart = null;
 
         window.onload = () => {
-            document.getElementById('user-name').value = perfil.nombre;
-            document.getElementById('user-weight').value = perfil.peso;
-            document.getElementById('user-height').value = perfil.altura;
-            seleccionarSemana(perfil.semana || 'Azul');
+            inicializarPerfil();
             actualizarInterfaz();
-            renderWaterDrops();
-
-            // Cerrar buscador al hacer click fuera
-            document.addEventListener('click', (e) => {
-                if(!e.target.closest('#alimento')) document.getElementById('search-results').classList.add('hidden');
-            });
+            renderWaterUI();
         };
 
-        // --- LÓGICA DE BÚSQUEDA ---
-        function buscarCatalogo(query) {
-            const resultsDiv = document.getElementById('search-results');
-            if (query.length < 1) {
-                resultsDiv.classList.add('hidden');
-                return;
-            }
-
-            const filtered = CATALOGO.filter(item => 
-                item.nombre.toLowerCase().includes(query.toLowerCase())
-            ).slice(0, 6);
-
-            if (filtered.length > 0) {
-                resultsDiv.innerHTML = filtered.map(item => `
-                    <div onclick="seleccionarCatalogo('${item.nombre}', ${item.calorias})" 
-                         class="p-4 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 flex justify-between items-center transition">
-                        <span class="font-semibold text-slate-700 text-sm">${item.nombre}</span>
-                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">${item.calorias} kcal</span>
-                    </div>
-                `).join('');
-                resultsDiv.classList.remove('hidden');
-            } else {
-                resultsDiv.classList.add('hidden');
-            }
+        function inicializarPerfil() {
+            document.getElementById('user-name').value = perfil.nombre || '';
+            document.getElementById('user-weight').value = perfil.peso || '';
+            document.getElementById('user-height').value = perfil.altura || '';
+            if (perfil.semana) seleccionarSemana(perfil.semana);
+            validarGuiaGeneral();
         }
 
-        function seleccionarCatalogo(nombre, calorias) {
-            document.getElementById('alimento').value = nombre;
-            document.getElementById('calorias').value = calorias;
-            document.getElementById('search-results').classList.add('hidden');
-            document.getElementById('cantidad-alimento').focus();
-            showToast("Alimento seleccionado del catálogo 🍎");
-        }
+        function seleccionarSemana(color) {
+            perfil.semana = color;
+            document.querySelectorAll('.week-btn').forEach(btn => btn.classList.remove('active'));
+            const targetBtn = document.getElementById(`week-${color}`);
+            if(targetBtn) targetBtn.classList.add('active');
+            
+            const themeColors = { 
+                Yellow: { main: '#facc15', border: '#eab308', rgb: '234, 179, 8' }, 
+                Black: { main: '#1e293b', border: '#000000', rgb: '0, 0, 0' }, 
+                Azul: { main: '#3b82f6', border: '#2563eb', rgb: '37, 99, 235' }, 
+                Rojo: { main: '#ef4444', border: '#dc2626', rgb: '220, 38, 38' } 
+            };
 
-        // --- LÓGICA DE AGUA ---
-        function setWaterUnit(unit) {
-            waterUnit = unit;
-            document.getElementById('unit-ml').className = unit === 'ml' ? 'px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition' : 'px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition';
-            document.getElementById('unit-L').className = unit === 'L' ? 'px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition' : 'px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition';
-            document.getElementById('water-unit-display').innerText = unit;
-            actualizarInterfazAgua();
+            const selected = themeColors[color];
+            document.documentElement.style.setProperty('--accent-color', selected.main);
+            document.documentElement.style.setProperty('--accent-border', selected.border);
+            document.documentElement.style.setProperty('--accent-rgb', selected.rgb);
+
+            const cards = ['main-header', 'profile-card', 'water-card', 'log-card', 'energy-card', 'macros-card', 'history-card'];
+            cards.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.className = el.className.replace(/dynamic-border/g, '') + ' dynamic-border';
+            });
+
+            document.getElementById('brand-icon').style.backgroundColor = selected.main;
+            document.getElementById('pro-badge').style.backgroundColor = selected.main;
+            document.getElementById('plus-icon-bg').style.backgroundColor = selected.border;
+            
+            document.getElementById('week-selector-container').classList.remove('pulse-guide');
+            guardarPerfil();
         }
 
         function addWater() {
             let val = parseFloat(document.getElementById('water-input').value);
-            if (isNaN(val) || val <= 0) { showToast("Ingresa una cantidad", "warning"); return; }
-            if (waterUnit === 'L') val = val * 1000;
+            if (isNaN(val) || val <= 0) return;
+            if (waterUnit === 'L') val *= 1000;
+            else if (waterUnit === 'oz') val *= 29.57;
             agua += val;
-            localStorage.setItem('nutrilog_v6_water', agua);
-            document.getElementById('water-input').value = "";
-            actualizarInterfazAgua();
-            renderWaterDrops();
-            showToast(`+${val}${waterUnit} registrados 💧`);
+            localStorage.setItem('nutrilog_final_water', Math.round(agua));
+            renderWaterUI();
+            document.getElementById('water-input').value = '';
+            document.getElementById('water-input').classList.remove('pulse-guide');
+            showToast(`+${Math.round(val)}ml registrados 💧`);
         }
 
-        function renderWaterDrops() {
-            const container = document.getElementById('water-drops-container');
-            container.innerHTML = "";
-            const numDrops = Math.max(8, Math.ceil(agua / 250));
-            const activeDrops = Math.floor(agua / 250);
-            for (let i = 0; i < numDrops; i++) {
-                const drop = document.createElement('i');
-                drop.className = `fa-solid fa-droplet drop-icon ${i < activeDrops ? 'drop-active' : 'drop-empty'} text-xl`;
-                container.appendChild(drop);
-            }
-        }
-
-        function actualizarInterfazAgua() {
+        function renderWaterUI() {
+            const bar = document.getElementById('water-progress-bar');
             const display = document.getElementById('water-current');
-            display.innerText = waterUnit === 'ml' ? agua : (agua / 1000).toFixed(1);
+            const percentage = Math.min(100, (agua / 2000) * 100);
+            bar.style.width = percentage + "%";
+            let val = waterUnit === 'L' ? (agua/1000).toFixed(2) : (waterUnit === 'oz' ? (agua/29.57).toFixed(1) : Math.round(agua));
+            display.innerText = val;
         }
 
-        // --- PERFIL Y BIOMETRÍA ---
-        function seleccionarSemana(color) {
-            perfil.semana = color;
-            localStorage.setItem('nutrilog_v6_perfil', JSON.stringify(perfil));
-            document.querySelectorAll('.week-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`week-${color}`).classList.add('active');
+        function buscarCatalogo(query) {
+            const res = document.getElementById('search-results');
+            if (query.length < 1) { res.classList.add('hidden'); return; }
+            const filtered = CATALOGO.filter(i => i.nombre.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+            if (filtered.length > 0) {
+                res.innerHTML = filtered.map(i => `
+                    <div onclick="seleccionarCat('${i.nombre}', ${i.calorias})" class="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 flex justify-between items-center transition">
+                        <span class="font-bold text-slate-700 text-sm">${i.nombre}</span>
+                        <span class="text-[10px] font-black text-blue-500">${i.calorias} kcal</span>
+                    </div>`).join('');
+                res.classList.remove('hidden');
+            } else { res.classList.add('hidden'); }
+        }
+
+        function seleccionarCat(n, k) {
+            document.getElementById('alimento').value = n;
+            document.getElementById('calorias').value = k;
+            document.getElementById('search-results').classList.add('hidden');
+            validarGuiaGeneral();
+        }
+
+        function agregarEntrada() {
+            const n = document.getElementById('alimento').value;
+            const k = parseInt(document.getElementById('calorias').value);
+            if (!n || isNaN(k)) { showToast("Campos obligatorios vacíos", "danger"); return; }
             
-            const colorMap = { 'Azul': '#3b82f6', 'Rojo': '#ef4444', 'Yellow': '#facc15', 'Black': '#000000' };
-            document.getElementById('brand-icon').style.backgroundColor = colorMap[color];
-            document.getElementById('brand-badge').style.color = colorMap[color];
+            const entry = {
+                id: Date.now(),
+                nombre: n, kcal: k,
+                momento: currentMeal,
+                cantidad: document.getElementById('cantidad-alimento').value || 1,
+                unidad: document.getElementById('unidad-alimento').value,
+                prot: parseInt(document.getElementById('proteinas').value) || 0,
+                semana: perfil.semana,
+                timestamp: Date.now(),
+                fechaStr: new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' }),
+                horaStr: new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })
+            };
+            
+            registros.push(entry);
+            guardarYRefrescar();
+            limpiarCamposComida();
+            showToast("Registro guardado con éxito");
         }
 
-        function guardarPerfil() {
-            perfil.nombre = document.getElementById('user-name').value;
-            perfil.peso = document.getElementById('user-weight').value;
-            perfil.altura = document.getElementById('user-height').value;
-            localStorage.setItem('nutrilog_v6_perfil', JSON.stringify(perfil));
-            actualizarInterfaz();
+        function actualizarInterfaz() {
+            const cuerpo = document.getElementById('tabla-cuerpo');
+            const empty = document.getElementById('empty-state');
+            cuerpo.innerHTML = "";
+            let totals = { kcal: 0, prot: 0 };
+            
+            // Orden: De más antiguo (arriba) a más reciente (abajo)
+            const ordenados = [...registros].sort((a, b) => a.timestamp - b.timestamp);
+            
+            if (ordenados.length === 0) empty.classList.remove('hidden');
+            else {
+                empty.classList.add('hidden');
+                ordenados.forEach(r => {
+                    const colorMap = { Desayuno: 'meal-desayuno', Almuerzo: 'meal-almuerzo', Cena: 'meal-cena', Snack: 'meal-snack' };
+                    const weekMap = { Azul: 'border-blue-500', Rojo: 'border-red-500', Yellow: 'border-yellow-400', Black: 'border-slate-900' };
+                    
+                    const hoy = new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' });
+                    if (r.fechaStr === hoy) { totals.kcal += r.kcal; totals.prot += r.prot; }
+
+                    cuerpo.innerHTML += `
+                        <tr class="animate-entry border-l-[12px] ${weekMap[r.semana] || 'border-transparent'}">
+                            <td class="p-6">
+                                <span class="px-2 py-0.5 rounded-md text-[7px] font-black uppercase mb-1 inline-block ${colorMap[r.momento]} text-white">${r.momento}</span>
+                                <div class="font-bold text-slate-800 text-sm">${r.nombre}</div>
+                                <div class="text-[9px] text-slate-400 font-bold uppercase">${r.fechaStr} • ${r.horaStr} • ${r.cantidad} ${r.unidad}</div>
+                            </td>
+                            <td class="p-6 text-center font-black text-slate-900">${r.kcal} <span class="text-[8px] text-slate-300 block">KCAL</span></td>
+                            <td class="p-6 text-right">
+                                <button onclick="eliminarItem(${r.id})" class="text-slate-200 hover:text-red-500 transition"><i class="fa-solid fa-circle-xmark text-lg"></i></button>
+                            </td>
+                        </tr>`;
+                });
+            }
+            
+            document.getElementById('txt-progreso').innerText = totals.kcal;
+            document.getElementById('barra-progreso').style.width = Math.min(100, (totals.kcal / 2000) * 100) + "%";
+            document.getElementById('items-count').innerText = `${registros.length} ITEMS`;
+            actualizarGrafico(totals.prot);
+            calcularIMC();
+        }
+
+        function compartirReporte() {
+            const now = new Date();
+            let msg = `🍎 *NUTRILOG PRO REPORT* 🍎\n👤 *Usuario:* ${perfil.nombre || 'N/A'}\n📅 ${now.toLocaleDateString()}\n🕒 ${now.toLocaleTimeString()}\n🎨 *Semana:* ${perfil.semana || 'No definida'}\n\n`;
+            registros.forEach(r => { msg += `[${r.momento.toUpperCase()}] ${r.nombre}: ${r.kcal} kcal\n`; });
+            msg += `\n💧 *Agua:* ${(agua/1000).toFixed(2)} L\n🚀 _Bio-Data Intelligence_`;
+            const el = document.createElement('textarea');
+            el.value = msg; document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
+            showToast("Reporte copiado al portapapeles ✅");
+        }
+
+        function validarGuia(el) {
+            if (el.value.trim() !== "") el.classList.remove('pulse-guide');
+            else el.classList.add('pulse-guide');
+        }
+
+        function validarGuiaGeneral() {
+            const inputs = ['user-name', 'user-weight', 'user-height', 'alimento', 'calorias'];
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.value.trim() !== "") el.classList.remove('pulse-guide');
+            });
         }
 
         function calcularIMC() {
@@ -431,179 +531,50 @@
             if (w > 0 && h > 0) {
                 const imc = (w / (h * h)).toFixed(1);
                 badge.innerText = `IMC: ${imc}`;
-                badge.className = "px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black";
+                badge.className = "px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold";
             }
         }
 
-        // --- GESTIÓN DE REGISTROS ---
-        function agregarEntrada() {
-            const n = document.getElementById('alimento').value;
-            const k = parseInt(document.getElementById('calorias').value);
-            if (!n || isNaN(k)) { showToast("Alimento y calorías requeridos", "warning"); return; }
-
-            const entry = {
-                id: Date.now(),
-                nombre: n,
-                kcal: k,
-                cantidad: document.getElementById('cantidad-alimento').value || 1,
-                unidad: document.getElementById('unidad-alimento').value,
-                prot: parseInt(document.getElementById('proteinas').value) || 0,
-                carb: parseInt(document.getElementById('carbs').value) || 0,
-                fat: parseInt(document.getElementById('grasas').value) || 0,
-                fecha: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-            };
-
-            registros.push(entry);
-            guardarYRefrescar();
-            limpiarCampos();
-            showToast("Registro guardado con éxito ✨");
+        function guardarPerfil() {
+            perfil.nombre = document.getElementById('user-name').value;
+            perfil.peso = document.getElementById('user-weight').value;
+            perfil.altura = document.getElementById('user-height').value;
+            localStorage.setItem('nutrilog_final_perfil', JSON.stringify(perfil));
         }
 
-        function limpiarCampos() {
-            ['alimento', 'calorias', 'proteinas', 'carbs', 'grasas', 'cantidad-alimento'].forEach(id => document.getElementById(id).value = "");
-            document.getElementById('alimento').focus();
-        }
-
-        function eliminarItem(id) {
-            registros = registros.filter(r => r.id !== id);
-            guardarYRefrescar();
-            showToast("Registro eliminado", "danger");
-        }
-
-        function guardarYRefrescar() {
-            localStorage.setItem('nutrilog_v6_data', JSON.stringify(registros));
-            actualizarInterfaz();
-        }
-
-        function actualizarInterfaz() {
-            const cuerpo = document.getElementById('tabla-cuerpo');
-            const empty = document.getElementById('empty-state');
-            cuerpo.innerHTML = "";
-            let totals = { kcal: 0, prot: 0, carb: 0, fat: 0 };
-
-            if (registros.length === 0) {
-                empty.classList.remove('hidden');
-            } else {
-                empty.classList.add('hidden');
-                [...registros].reverse().forEach(r => {
-                    totals.kcal += r.kcal; totals.prot += r.prot;
-                    totals.carb += r.carb; totals.fat += r.fat;
-                    cuerpo.innerHTML += `
-                        <tr class="animate-entry group">
-                            <td class="p-6">
-                                <div class="font-bold text-slate-800">${r.nombre}</div>
-                                <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">
-                                    ${r.cantidad} ${r.unidad} • ${r.fecha}
-                                </div>
-                            </td>
-                            <td class="p-6 text-center">
-                                <span class="font-black text-slate-900">${r.kcal}</span>
-                                <span class="block text-[8px] text-slate-400 font-bold">KCAL</span>
-                            </td>
-                            <td class="p-6 text-right">
-                                <button onclick="eliminarItem(${r.id})" class="w-10 h-10 rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 transition-all">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                });
-            }
-
-            document.getElementById('txt-progreso').innerText = totals.kcal;
-            document.getElementById('items-count').innerText = `${registros.length} Registros`;
-            const porc = Math.min(100, Math.round((totals.kcal / 2000) * 100));
-            document.getElementById('porcentaje').innerText = porc + "%";
-            document.getElementById('barra-progreso').style.width = porc + "%";
-
-            actualizarGrafico(totals.prot, totals.carb, totals.fat);
-            calcularIMC();
-        }
-
-        function actualizarGrafico(p, c, g) {
+        function actualizarGrafico(p) {
             const ctx = document.getElementById('macroChart').getContext('2d');
-            const data = { datasets: [{ data: [p||1, c||1, g||1], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0, hoverOffset: 4 }] };
-            if (myChart) { myChart.data = data; myChart.update(); }
-            else { myChart = new Chart(ctx, { type: 'doughnut', data: data, options: { cutout: '75%', plugins: { legend: { display: false } } } }); }
+            if (myChart) { myChart.data.datasets[0].data = [p||1, 60, 30]; myChart.update(); }
+            else { myChart = new Chart(ctx, { type: 'doughnut', data: { datasets: [{ data: [1, 60, 30], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }] }, options: { cutout: '80%', plugins: { legend: { display: false } } } }); }
         }
 
-        // --- IMPORTACIÓN Y COMPARTIR ---
-        function abrirImportModal() { document.getElementById('import-modal').classList.remove('hidden'); }
-        function closeImportModal() { document.getElementById('import-modal').classList.add('hidden'); }
-
-        function procesarTextoImportado() {
-            const texto = document.getElementById('import-text').value;
-            const regex = /•\s*(.*?):\s*(\d+)\s*kcal/gi;
-            let match, count = 0;
-            while ((match = regex.exec(texto)) !== null) {
-                registros.push({
-                    id: Date.now() + count,
-                    nombre: match[1].trim(),
-                    kcal: parseInt(match[2]),
-                    cantidad: 1, unidad: "Unidad", prot: 0, carb: 0, fat: 0,
-                    fecha: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-                });
-                count++;
-            }
-            if (count > 0) { guardarYRefrescar(); closeImportModal(); showToast(`${count} registros importados 🚀`); }
-            else showToast("No se detectó el formato", "warning");
-        }
-
-        function compartirReporte() {
-            if (registros.length === 0) { showToast("No hay datos hoy", "warning"); return; }
-            
-            const now = new Date();
-            const fStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-            const hStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            
-            let t = { k:0, p:0, c:0, g:0 }, list = "";
-            registros.forEach(r => {
-                t.k += r.kcal; t.p += r.prot; t.c += r.carb; t.g += r.fat;
-                list += `• ${r.nombre}: ${r.kcal} kcal (${r.cantidad} ${r.unidad})\n`;
-            });
-
-            const msg = `🍎 *NutriLog Pro - Reporte* 🍎
-👤 *Usuario:* ${perfil.nombre || 'Sin nombre'}
-🎨 *Semana:* ${perfil.semana}
-📅 ${fStr.toUpperCase()}
-🕒 ${hStr}
-
-🔥 *Energía:* ${t.k} / 2000 kcal
-🥩 Prot: ${t.p}g | 🍞 Carb: ${t.c}g | 🥑 Gras: ${t.g}g
-💧 *Agua:* ${(agua/1000).toFixed(1)} Litros
-
-📝 *Detalle:*
-${list}
-_Enviado desde mi Bio-Dashboard_ 🚀`;
-
-            const el = document.createElement('textarea');
-            el.value = msg; document.body.appendChild(el); el.select();
-            document.execCommand('copy'); document.body.removeChild(el);
-            showToast("Reporte con fecha/hora copiado ✅");
-        }
-
-        function solicitarLimpieza() {
-            document.getElementById('confirm-modal').classList.remove('hidden');
-            document.getElementById('modal-confirm-btn').onclick = () => {
-                registros = []; agua = 0;
-                localStorage.removeItem('nutrilog_v6_data');
-                localStorage.removeItem('nutrilog_v6_water');
-                guardarYRefrescar();
-                renderWaterDrops();
-                closeConfirmModal();
-                showToast("Día reiniciado con éxito", "danger");
-            };
-        }
-        function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
-
-        function showToast(msg, type = "success") {
+        function showToast(msg, type="success") {
             const container = document.getElementById('toast-container');
             const t = document.createElement('div');
-            const colors = { success: 'bg-slate-900', warning: 'bg-amber-500', danger: 'bg-red-500' };
-            t.className = `${colors[type]} text-white px-8 py-4 rounded-2xl shadow-2xl font-bold text-xs animate-entry flex items-center gap-3 border border-white/10`;
-            t.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-circle-exclamation'}"></i> ${msg.toUpperCase()}`;
+            const border = type === "danger" ? "border-red-500" : "border-slate-900";
+            t.className = `bg-slate-900 text-white px-8 py-4 rounded-3xl shadow-2xl font-bold text-[10px] animate-entry tracking-widest uppercase mb-2 border-l-4 ${border}`;
+            t.innerText = msg;
             container.appendChild(t);
-            setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-10px)'; setTimeout(() => t.remove(), 400); }, 3000);
+            setTimeout(() => t.remove(), 3000);
         }
+
+        function selectMeal(m) { currentMeal = m; document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('active')); document.getElementById(`meal-${m}`).classList.add('active'); }
+        function setWaterUnit(u) { waterUnit = u; document.querySelectorAll('.unit-btn').forEach(b => b.className = 'unit-btn py-2 text-[10px] font-black rounded-xl bg-slate-100 text-slate-400 transition'); document.getElementById(`unit-${u}`).className = 'unit-btn py-2 text-[10px] font-black rounded-xl bg-blue-600 text-white transition'; document.getElementById('water-unit-display').innerText = u; renderWaterUI(); }
+        function abrirImportModal() { document.getElementById('import-modal').classList.remove('hidden'); }
+        function closeImportModal() { document.getElementById('import-modal').classList.add('hidden'); }
+        function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
+        function guardarYRefrescar() { localStorage.setItem('nutrilog_pro_data', JSON.stringify(registros)); actualizarInterfaz(); }
+        function eliminarItem(id) { registros = registros.filter(r => r.id !== id); guardarYRefrescar(); }
+        function clearWater() { agua = 0; localStorage.setItem('nutrilog_final_water', 0); renderWaterUI(); showToast("Contador de agua reiniciado", "danger"); }
+        function solicitarLimpieza() {
+            document.getElementById('modal-desc').innerText = "¿Borrar todos los registros del historial y agua de hoy?";
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            document.getElementById('modal-confirm-btn').onclick = () => {
+                registros = []; agua = 0; localStorage.removeItem('nutrilog_pro_data'); localStorage.removeItem('nutrilog_final_water');
+                actualizarInterfaz(); renderWaterUI(); closeConfirmModal();
+            };
+        }
+        function limpiarCamposComida() { ['alimento', 'calorias', 'proteinas', 'cantidad-alimento'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; }); }
     </script>
 </body>
 </html>
