@@ -2,141 +2,514 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NutriLog - Control Local</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NutriLog Pro - Dashboard de Biometría</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --water: #3b82f6;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+
+        .progress-transition { transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        
+        .animate-entry { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn {
+            from { transform: translateY(15px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .week-btn {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        .week-btn.active {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+        }
+
+        .drop-icon {
+            transition: all 0.4s ease;
+            filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.2));
+        }
+        .drop-active { color: #3b82f6; transform: scale(1.1); }
+        .drop-empty { color: #e2e8f0; }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+<body class="bg-slate-50 text-slate-800 min-h-screen selection:bg-blue-100">
 
-    <div class="max-w-4xl mx-auto space-y-6">
-        
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-6 gap-4">
-            <div>
-                <h1 class="text-3xl font-bold tracking-tight text-slate-900">NutriLog</h1>
-                <p class="text-sm text-slate-500">Control nutricional privado y portátil</p>
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] max-w-sm w-full p-8 shadow-2xl animate-entry text-center border border-slate-100">
+            <div class="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fa-solid fa-trash-can text-3xl"></i>
             </div>
-            <div class="flex gap-2 w-full sm:w-auto">
-                <button onclick="exportarCSV()" class="flex-1 sm:flex-none bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 px-6 rounded-xl transition cursor-pointer text-center text-sm">
-                    Exportar CSV
+            <h3 class="text-2xl font-bold text-slate-900 mb-3">¿Limpiar datos?</h3>
+            <p class="text-slate-500 mb-8">Esta acción borrará alimentos y consumo de agua de hoy.</p>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="closeConfirmModal()" class="flex-1 px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl">Cancelar</button>
+                <button id="modal-confirm-btn" class="flex-1 px-6 py-4 bg-red-500 text-white font-bold rounded-2xl shadow-lg shadow-red-100">Sí, borrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] max-w-2xl w-full p-6 md:p-8 shadow-2xl animate-entry flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-slate-900 tracking-tight">Importar Reporte</h3>
+                <button onclick="closeImportModal()" class="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400">
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
-                <button onclick="limpiarTodo()" class="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 px-4 rounded-xl transition cursor-pointer text-sm">
-                    Limpiar
+            </div>
+            <textarea id="import-text" class="flex-1 w-full min-h-[200px] bg-slate-50 border border-slate-100 rounded-3xl p-6 text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-6" placeholder="Pega el mensaje de WhatsApp aquí..."></textarea>
+            <button onclick="procesarTextoImportado()" class="w-full px-6 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-100">PROCESAR AHORA</button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col lg:flex-row justify-between items-center bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 gap-6">
+            <div class="flex items-center gap-4 self-start lg:self-center">
+                <div id="brand-icon" class="w-14 h-14 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black tracking-tighter text-slate-900">NutriLog <span id="brand-badge" class="text-blue-600 font-extrabold text-xs md:text-sm uppercase px-3 py-1 bg-blue-50 rounded-full ml-1">PRO</span></h1>
+                    <p class="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-[0.2em]">Bio-Tracking Engine</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 w-full lg:w-auto">
+                <button onclick="abrirImportModal()" class="flex flex-col items-center justify-center gap-1 p-3 bg-slate-50 text-slate-600 font-bold rounded-2xl text-[10px] active:scale-95 transition">
+                    <i class="fa-solid fa-file-import text-lg"></i> IMPORTAR
+                </button>
+                <button onclick="compartirReporte()" class="flex flex-col items-center justify-center gap-1 p-3 bg-emerald-600 text-white font-bold rounded-2xl text-[10px] shadow-lg shadow-emerald-100 active:scale-95 transition">
+                    <i class="fa-solid fa-share-nodes text-lg"></i> COMPARTIR
+                </button>
+                <button onclick="solicitarLimpieza()" class="flex flex-col items-center justify-center gap-1 p-3 bg-red-50 text-red-500 font-bold rounded-2xl text-[10px] active:scale-95 transition">
+                    <i class="fa-solid fa-trash-can text-lg"></i> LIMPIAR
                 </button>
             </div>
         </header>
 
-        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h2 class="text-lg font-semibold mb-4 text-slate-700">Registrar Consumo</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input type="text" id="alimento" placeholder="Nombre del alimento" class="bg-slate-50 border border-slate-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition">
-                <input type="number" id="calorias" placeholder="Calorías (kcal)" class="bg-slate-50 border border-slate-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition">
-                <button onclick="agregarEntrada()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-md">
-                    + Añadir
-                </button>
-            </div>
-        </section>
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Sidebar: Perfil y Nueva Entrada -->
+            <aside class="lg:col-span-4 space-y-6">
+                <!-- Perfil -->
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-400">Perfil Biométrico</h3>
+                        <span id="bmi-badge" class="px-3 py-1 rounded-full bg-slate-50 text-slate-400 text-[10px] font-bold">IMC: --</span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
+                            <label class="text-[9px] font-black uppercase text-slate-400 block mb-4 text-center tracking-widest">Semana del Ciclo</label>
+                            <div class="flex justify-between items-center px-4">
+                                <button onclick="seleccionarSemana('Azul')" id="week-Azul" class="week-btn w-10 h-10 rounded-full bg-blue-500"></button>
+                                <button onclick="seleccionarSemana('Rojo')" id="week-Rojo" class="week-btn w-10 h-10 rounded-full bg-red-500"></button>
+                                <button onclick="seleccionarSemana('Yellow')" id="week-Yellow" class="week-btn w-10 h-10 rounded-full bg-yellow-400"></button>
+                                <button onclick="seleccionarSemana('Black')" id="week-Black" class="week-btn w-10 h-10 rounded-full bg-black"></button>
+                            </div>
+                        </div>
 
-        <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-50">
-                        <tr>
-                            <th class="p-4 text-sm font-semibold text-slate-600 border-b">Fecha</th>
-                            <th class="p-4 text-sm font-semibold text-slate-600 border-b">Alimento</th>
-                            <th class="p-4 text-sm font-semibold text-slate-600 border-b text-right">Calorías</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-cuerpo">
-                        </tbody>
-                    <tfoot class="bg-slate-50 font-bold">
-                        <tr>
-                            <td colspan="2" class="p-4 text-slate-700 text-right">Total Diario:</td>
-                            <td id="total-calorias" class="p-4 text-right text-blue-600">0 kcal</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </section>
+                        <input type="text" id="user-name" onchange="guardarPerfil()" placeholder="Nombre" class="w-full bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 p-4 rounded-2xl outline-none font-bold text-slate-700 transition-all">
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="relative">
+                                <input type="number" id="user-weight" onchange="guardarPerfil()" placeholder="Peso" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-black">KG</span>
+                            </div>
+                            <div class="relative">
+                                <input type="number" id="user-height" onchange="guardarPerfil()" placeholder="Alt" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] text-slate-300 font-black">CM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden bg-gradient-to-br from-white to-blue-50/30">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-blue-500">Hidratación</h3>
+                        <div class="flex items-center bg-blue-50 p-1 rounded-xl">
+                            <button onclick="setWaterUnit('ml')" id="unit-ml" class="px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition">ML</button>
+                            <button onclick="setWaterUnit('L')" id="unit-L" class="px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition">L</button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center mb-6">
+                        <div class="flex flex-wrap justify-center gap-2 mb-4" id="water-drops-container">
+                            <!-- Gotas generadas dinámicamente -->
+                        </div>
+                        <div class="text-center">
+                            <span id="water-current" class="text-4xl font-black text-blue-600">0</span>
+                            <span id="water-unit-display" class="text-blue-300 font-bold ml-1">ml</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="number" id="water-input" placeholder="Cantidad" class="w-full bg-blue-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-blue-600">
+                        <button onclick="addWater()" class="bg-blue-600 text-white font-black rounded-2xl active:scale-95 transition shadow-lg shadow-blue-100">
+                            + AÑADIR
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Añadir Alimento -->
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <h2 class="text-xl font-bold mb-6 flex items-center gap-3">
+                        <span class="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-sm"><i class="fa-solid fa-plus"></i></span>
+                        Alimento
+                    </h2>
+                    <div class="space-y-4">
+                        <input type="text" id="alimento" placeholder="¿Qué comiste?" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none focus:bg-white transition-all font-medium">
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" id="calorias" placeholder="Calorías" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
+                            <input type="number" id="proteinas" placeholder="Prot (g)" class="w-full bg-emerald-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-emerald-600">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" id="carbs" placeholder="Carb (g)" class="w-full bg-amber-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-amber-600">
+                            <input type="number" id="grasas" placeholder="Grasa (g)" class="w-full bg-rose-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-rose-600">
+                        </div>
+                        <button onclick="agregarEntrada()" class="w-full bg-slate-900 text-white font-black py-5 rounded-[1.5rem] shadow-xl active:scale-95 transition-all">
+                            GUARDAR REGISTRO
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="lg:col-span-8 space-y-6">
+                <!-- Dashboard de Progreso -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Calorías Totales</p>
+                                <div class="flex items-baseline gap-2">
+                                    <span id="txt-progreso" class="text-6xl font-black text-slate-900 tracking-tighter">0</span>
+                                    <span class="text-slate-300 font-bold text-xl">/ 2000</span>
+                                </div>
+                            </div>
+                            <div id="porcentaje" class="text-lg font-black text-blue-600 bg-blue-50 px-4 py-2 rounded-2xl">0%</div>
+                        </div>
+                        <div class="w-full bg-slate-100 h-8 rounded-full overflow-hidden p-1.5">
+                            <div id="barra-progreso" class="h-full bg-blue-600 rounded-full progress-transition" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div class="w-32 h-32 md:w-40 md:h-40 relative">
+                            <canvas id="macroChart"></canvas>
+                        </div>
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Proteínas</span></div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Carbos</span></div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-rose-500"></span><span class="text-[10px] font-bold text-slate-500 uppercase">Grasas</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                        <h3 class="font-black text-slate-800 text-sm uppercase tracking-widest">Registros de Hoy</h3>
+                        <span id="items-count" class="text-[10px] font-black bg-white border border-slate-100 text-slate-400 px-4 py-2 rounded-full">0 Items</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <tbody id="tabla-cuerpo" class="divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                    <div id="empty-state" class="py-20 text-center flex flex-col items-center gap-4">
+                        <i class="fa-solid fa-utensils text-slate-200 text-3xl"></i>
+                        <p class="text-slate-300 font-medium italic">Sin registros para hoy</p>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script>
-        // Cargar datos al iniciar
-        let registros = JSON.parse(localStorage.getItem('nutrilog_datos')) || [];
-        actualizarTabla();
+        let registros = JSON.parse(localStorage.getItem('nutrilog_v4_data')) || [];
+        let agua = parseInt(localStorage.getItem('nutrilog_v4_water')) || 0;
+        let waterUnit = 'ml';
+        let perfil = JSON.parse(localStorage.getItem('nutrilog_v4_perfil')) || { nombre: '', peso: '', altura: '', semana: 'Azul' };
+        let myChart = null;
 
+        window.onload = () => {
+            document.getElementById('user-name').value = perfil.nombre;
+            document.getElementById('user-weight').value = perfil.peso;
+            document.getElementById('user-height').value = perfil.altura;
+            seleccionarSemana(perfil.semana || 'Azul');
+            actualizarInterfaz();
+            renderWaterDrops();
+        };
+
+        // --- LÓGICA DE AGUA ---
+        function setWaterUnit(unit) {
+            waterUnit = unit;
+            document.getElementById('unit-ml').className = unit === 'ml' ? 'px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition' : 'px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition';
+            document.getElementById('unit-L').className = unit === 'L' ? 'px-2 py-1 text-[9px] font-black rounded-lg bg-white shadow-sm text-blue-600 transition' : 'px-2 py-1 text-[9px] font-black rounded-lg text-slate-400 transition';
+            document.getElementById('water-unit-display').innerText = unit;
+            actualizarInterfazAgua();
+        }
+
+        function addWater() {
+            let val = parseFloat(document.getElementById('water-input').value);
+            if (isNaN(val) || val <= 0) { showToast("Ingresa una cantidad", "warning"); return; }
+            
+            // Convertir todo a ml para almacenamiento
+            if (waterUnit === 'L') val = val * 1000;
+            
+            agua += val;
+            localStorage.setItem('nutrilog_v4_water', agua);
+            document.getElementById('water-input').value = "";
+            actualizarInterfazAgua();
+            renderWaterDrops();
+            showToast(`+${val}${waterUnit} registrados 💧`);
+        }
+
+        function renderWaterDrops() {
+            const container = document.getElementById('water-drops-container');
+            container.innerHTML = "";
+            // Una gota cada 250ml (8 gotas = 2L)
+            const numDrops = Math.max(8, Math.ceil(agua / 250));
+            const activeDrops = Math.floor(agua / 250);
+
+            for (let i = 0; i < numDrops; i++) {
+                const drop = document.createElement('i');
+                drop.className = `fa-solid fa-droplet drop-icon ${i < activeDrops ? 'drop-active' : 'drop-empty'}`;
+                container.appendChild(drop);
+            }
+        }
+
+        function actualizarInterfazAgua() {
+            const display = document.getElementById('water-current');
+            if (waterUnit === 'ml') {
+                display.innerText = agua;
+            } else {
+                display.innerText = (agua / 1000).toFixed(1);
+            }
+        }
+
+        // --- LÓGICA DE PERFIL Y SEMANA ---
+        function seleccionarSemana(color) {
+            perfil.semana = color;
+            localStorage.setItem('nutrilog_v4_perfil', JSON.stringify(perfil));
+            document.querySelectorAll('.week-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`week-${color}`).classList.add('active');
+
+            const brandIcon = document.getElementById('brand-icon');
+            const brandBadge = document.getElementById('brand-badge');
+            const colors = {
+                'Azul': { bg: 'bg-blue-600', text: 'text-blue-600', b: 'bg-blue-50' },
+                'Rojo': { bg: 'bg-red-600', text: 'text-red-600', b: 'bg-red-50' },
+                'Yellow': { bg: 'bg-yellow-400', text: 'text-yellow-600', b: 'bg-yellow-50' },
+                'Black': { bg: 'bg-black', text: 'text-black', b: 'bg-slate-200' }
+            }[color];
+            brandIcon.className = `w-14 h-14 ${colors.bg} rounded-[1.25rem] flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500`;
+            brandBadge.className = `${colors.text} font-extrabold text-xs md:text-sm uppercase px-3 py-1 ${colors.b} rounded-full ml-1`;
+        }
+
+        function guardarPerfil() {
+            perfil.nombre = document.getElementById('user-name').value;
+            perfil.peso = document.getElementById('user-weight').value;
+            perfil.altura = document.getElementById('user-height').value;
+            localStorage.setItem('nutrilog_v4_perfil', JSON.stringify(perfil));
+            calcularIMC();
+        }
+
+        function calcularIMC() {
+            const w = parseFloat(perfil.peso), h = parseFloat(perfil.altura) / 100;
+            const badge = document.getElementById('bmi-badge');
+            if (w > 0 && h > 0) {
+                const imc = (w / (h * h)).toFixed(1);
+                badge.innerText = `IMC: ${imc}`;
+                badge.className = "px-3 py-1 rounded-full bg-blue-600 text-white text-[10px] font-black shadow-lg shadow-blue-100";
+            }
+        }
+
+        // --- LÓGICA DE ALIMENTOS ---
         function agregarEntrada() {
-            const alimento = document.getElementById('alimento').value;
-            const calorias = document.getElementById('calorias').value;
-            const fecha = new Date().toLocaleDateString();
+            const n = document.getElementById('alimento').value;
+            const k = parseInt(document.getElementById('calorias').value);
+            if (!n || isNaN(k)) { showToast("Faltan datos", "danger"); return; }
 
-            if (alimento === "" || calorias === "") {
-                alert("Por favor completa los campos");
-                return;
-            }
-
-            const nuevaEntrada = { fecha, alimento, calorias: parseInt(calorias) };
-            registros.push(nuevaEntrada);
-            
-            // Guardar en memoria local (no se borra al cerrar)
-            localStorage.setItem('nutrilog_datos', JSON.stringify(registros));
-            
-            // Limpiar inputs y actualizar
-            document.getElementById('alimento').value = "";
-            document.getElementById('calorias').value = "";
-            actualizarTabla();
+            registros.push({
+                id: Date.now(),
+                nombre: n, kcal: k,
+                prot: parseInt(document.getElementById('proteinas').value) || 0,
+                carb: parseInt(document.getElementById('carbs').value) || 0,
+                fat: parseInt(document.getElementById('grasas').value) || 0,
+                fecha: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})
+            });
+            guardarYRefrescar();
+            document.querySelectorAll('input:not([onchange]):not(#water-input)').forEach(i => i.value = "");
+            showToast("Alimento guardado 🍎");
         }
 
-        function actualizarTabla() {
+        function eliminarItem(id) {
+            registros = registros.filter(r => r.id !== id);
+            guardarYRefrescar();
+            showToast("Eliminado", "warning");
+        }
+
+        function guardarYRefrescar() {
+            localStorage.setItem('nutrilog_v4_data', JSON.stringify(registros));
+            actualizarInterfaz();
+        }
+
+        function actualizarInterfaz() {
             const cuerpo = document.getElementById('tabla-cuerpo');
-            const totalElemento = document.getElementById('total-calorias');
+            const empty = document.getElementById('empty-state');
             cuerpo.innerHTML = "";
-            let total = 0;
+            let totals = { kcal: 0, prot: 0, carb: 0, fat: 0 };
 
-            registros.forEach((entry) => {
-                total += entry.calorias;
-                const fila = `
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="p-4 text-sm text-slate-500 border-b">${entry.fecha}</td>
-                        <td class="p-4 text-sm font-medium text-slate-700 border-b">${entry.alimento}</td>
-                        <td class="p-4 text-sm text-right text-slate-600 border-b">${entry.calorias} kcal</td>
-                    </tr>
-                `;
-                cuerpo.innerHTML += fila;
-            });
-
-            totalElemento.innerText = total + " kcal";
-        }
-
-        function exportarCSV() {
-            if (registros.length === 0) {
-                alert("No hay datos para exportar");
-                return;
+            if (registros.length === 0) empty.classList.remove('hidden');
+            else {
+                empty.classList.add('hidden');
+                [...registros].reverse().forEach(item => {
+                    totals.kcal += item.kcal; totals.prot += item.prot;
+                    totals.carb += item.carb; totals.fat += item.fat;
+                    cuerpo.innerHTML += `
+                        <tr class="animate-entry hover:bg-slate-50/50 transition">
+                            <td class="px-8 py-5">
+                                <div class="font-bold text-slate-800 text-sm">${item.nombre}</div>
+                                <div class="text-[9px] text-slate-300 font-black uppercase">${item.fecha}</div>
+                            </td>
+                            <td class="px-4 py-5 text-center">
+                                <span class="font-black text-slate-600 text-lg">${item.kcal}</span>
+                                <span class="text-[9px] text-slate-300 font-bold block">KCAL</span>
+                            </td>
+                            <td class="px-8 py-5 text-right">
+                                <button onclick="eliminarItem(${item.id})" class="text-slate-200 hover:text-red-500 transition"><i class="fa-solid fa-xmark"></i></button>
+                            </td>
+                        </tr>`;
+                });
             }
 
-            let csvContent = "data:text/csv;charset=utf-8,Fecha,Alimento,Calorias\n";
-            registros.forEach(row => {
-                csvContent += `${row.fecha},${row.alimento},${row.calorias}\n`;
-            });
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "mi_nutricion.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            document.getElementById('txt-progreso').innerText = totals.kcal;
+            const porc = Math.round((totals.kcal / 2000) * 100);
+            document.getElementById('porcentaje').innerText = porc + "%";
+            document.getElementById('barra-progreso').style.width = Math.min(100, porc) + "%";
+            document.getElementById('items-count').innerText = `${registros.length} Items`;
+            
+            actualizarGrafico(totals.prot, totals.carb, totals.fat);
+            actualizarInterfazAgua();
+            renderWaterDrops();
         }
 
-        function limpiarTodo() {
-            if (confirm("¿Estás seguro de borrar todos los datos?")) {
-                registros = [];
-                localStorage.removeItem('nutrilog_datos');
-                actualizarTabla();
+        function actualizarGrafico(p, c, g) {
+            const ctx = document.getElementById('macroChart').getContext('2d');
+            const data = { datasets: [{ data: (p+c+g)>0 ? [p, c, g] : [1,1,1], backgroundColor: (p+c+g)>0 ? ['#10b981', '#f59e0b', '#f43f5e'] : ['#f8fafc','#f1f5f9','#f8fafc'], borderWidth: 0 }] };
+            if (myChart) { myChart.data = data; myChart.update(); }
+            else { myChart = new Chart(ctx, { type: 'doughnut', data, options: { cutout: '75%', plugins: { legend: { display: false } } } }); }
+        }
+
+        function compartirReporte() {
+            if (registros.length === 0 && agua === 0) { showToast("Sin datos para compartir", "warning"); return; }
+            let totals = { k:0, p:0, c:0, g:0 }, list = "";
+            registros.forEach(r => {
+                totals.k += r.kcal; totals.p += r.prot; totals.c += r.carb; totals.g += r.fat;
+                list += `• ${r.nombre}: ${r.kcal} kcal (${r.prot}P/${r.carb}C/${r.fat}G)\n`;
+            });
+
+            const now = new Date();
+            const emojiMap = { 'Azul': '🟦', 'Rojo': '🟥', 'Yellow': '🟨', 'Black': '⬛' };
+            const msg = `🍎 *NutriLog Pro Report* 🍎
+👤 *Usuario:* ${perfil.nombre || 'Invitado'}
+📍 *Fase:* ${emojiMap[perfil.semana]} SEMANA ${perfil.semana.toUpperCase()}
+📅 ${now.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}
+🕒 ${now.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })}
+
+🔥 *CALORÍAS:* ${totals.k} / 2000 kcal
+🥩 P: ${totals.p}g | 🍞 C: ${totals.c}g | 🥑 G: ${totals.g}g
+💧 *AGUA:* ${(agua/1000).toFixed(2)} Litros
+
+📝 *DETALLE:*
+${list}
+_Generado con NutriLog Pro_ 🚀`;
+
+            const el = document.createElement('textarea');
+            el.value = msg; document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
+            showToast("Reporte copiado para WhatsApp 📋");
+        }
+
+        function abrirImportModal() { document.getElementById('import-modal').classList.remove('hidden'); }
+        function closeImportModal() { document.getElementById('import-modal').classList.add('hidden'); }
+        
+        function procesarTextoImportado() {
+            const texto = document.getElementById('import-text').value;
+            const regex = /(?:•|[*])?\s*(.*?):\s*(\d+)\s*kcal\s*\((\d+)P\/(\d+)C\/(\d+)G\)/gi;
+            const waterRegex = /💧\s*AGUA:\s*([\d.]+)\s*Litros/i;
+            
+            let match, count = 0;
+            while ((match = regex.exec(texto)) !== null) {
+                registros.push({
+                    id: Date.now() + count,
+                    nombre: match[1].trim(), kcal: parseInt(match[2]),
+                    prot: parseInt(match[3]), carb: parseInt(match[4]), fat: parseInt(match[5]),
+                    fecha: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})
+                });
+                count++;
             }
+
+            const waterMatch = waterRegex.exec(texto);
+            if (waterMatch) {
+                agua = parseFloat(waterMatch[1]) * 1000;
+                localStorage.setItem('nutrilog_v4_water', agua);
+            }
+
+            if (count > 0 || waterMatch) {
+                guardarYRefrescar();
+                closeImportModal();
+                showToast(`¡Importación exitosa!`);
+            } else { showToast("Formato no válido", "danger"); }
+        }
+
+        function solicitarLimpieza() {
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            document.getElementById('modal-confirm-btn').onclick = () => {
+                registros = []; agua = 0;
+                localStorage.setItem('nutrilog_v4_water', 0);
+                guardarYRefrescar();
+                document.getElementById('confirm-modal').classList.add('hidden');
+                showToast("Datos borrados", "danger");
+            };
+        }
+        function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
+
+        function showToast(msg, type = "success") {
+            const container = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            const colors = { success: 'bg-slate-900', danger: 'bg-red-500', warning: 'bg-amber-500' };
+            t.className = `${colors[type]} text-white px-6 py-4 rounded-2xl shadow-2xl font-bold text-xs animate-entry flex items-center justify-between gap-4 border border-white/10`;
+            t.innerHTML = `<span>${msg}</span><i class="fa-solid fa-check-circle opacity-50"></i>`;
+            container.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
         }
     </script>
 </body>
