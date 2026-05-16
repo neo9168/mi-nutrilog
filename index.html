@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NutriLog Pro - Dashboard de Biometría</title>
+    <title>NutriLog Pro - Dashboard de Biometría y Porciones</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -52,6 +52,13 @@
 
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        /* Sugerencias de búsqueda */
+        #search-results {
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 50;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen selection:bg-blue-100">
@@ -89,7 +96,6 @@
 
     <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
         
-        <!-- Header -->
         <header class="flex flex-col lg:flex-row justify-between items-center bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 gap-6">
             <div class="flex items-center gap-4 self-start lg:self-center">
                 <div id="brand-icon" class="w-14 h-14 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500">
@@ -115,7 +121,6 @@
 
         <main class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            <!-- Sidebar: Perfil y Nueva Entrada -->
             <aside class="lg:col-span-4 space-y-6">
                 <!-- Perfil -->
                 <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
@@ -150,6 +155,7 @@
                     </div>
                 </div>
 
+                <!-- Hidratación -->
                 <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden bg-gradient-to-br from-white to-blue-50/30">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xs font-black uppercase tracking-widest text-blue-500">Hidratación</h3>
@@ -160,9 +166,7 @@
                     </div>
 
                     <div class="flex flex-col items-center mb-6">
-                        <div class="flex flex-wrap justify-center gap-2 mb-4" id="water-drops-container">
-                            <!-- Gotas generadas dinámicamente -->
-                        </div>
+                        <div class="flex flex-wrap justify-center gap-2 mb-4" id="water-drops-container"></div>
                         <div class="text-center">
                             <span id="water-current" class="text-4xl font-black text-blue-600">0</span>
                             <span id="water-unit-display" class="text-blue-300 font-bold ml-1">ml</span>
@@ -177,14 +181,29 @@
                     </div>
                 </div>
                 
-                <!-- Añadir Alimento -->
-                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative">
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-3">
                         <span class="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-sm"><i class="fa-solid fa-plus"></i></span>
                         Alimento
                     </h2>
                     <div class="space-y-4">
-                        <input type="text" id="alimento" placeholder="¿Qué comiste?" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none focus:bg-white transition-all font-medium">
+                        <div class="relative">
+                            <input type="text" id="alimento" oninput="buscarCatalogo(this.value)" placeholder="¿Qué comiste?" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none focus:bg-white transition-all font-medium" autocomplete="off">
+                            <!-- Lista de sugerencias dinámica -->
+                            <div id="search-results" class="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 hidden z-50 overflow-hidden"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" id="cantidad-alimento" placeholder="Cantidad" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-slate-600">
+                            <select id="unidad-alimento" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-slate-600 appearance-none">
+                                <option value="Unidad">Unidad</option>
+                                <option value="Gramos">Gramos (g)</option>
+                                <option value="Onzas">Onzas (oz)</option>
+                                <option value="Slides">Slides (reb)</option>
+                                <option value="Liquid">Líquido (ml)</option>
+                            </select>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-3">
                             <input type="number" id="calorias" placeholder="Calorías" class="w-full bg-slate-50 border-transparent p-4 rounded-2xl outline-none font-bold text-center">
                             <input type="number" id="proteinas" placeholder="Prot (g)" class="w-full bg-emerald-50/50 border-transparent p-4 rounded-2xl outline-none font-bold text-center text-emerald-600">
@@ -201,7 +220,6 @@
             </aside>
 
             <section class="lg:col-span-8 space-y-6">
-                <!-- Dashboard de Progreso -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                         <div class="flex justify-between items-start mb-6">
@@ -252,10 +270,52 @@
     </div>
 
     <script>
-        let registros = JSON.parse(localStorage.getItem('nutrilog_v4_data')) || [];
-        let agua = parseInt(localStorage.getItem('nutrilog_v4_water')) || 0;
+        // CATÁLOGO COMPLETO BASADO EN LA PIRÁMIDE ALIMENTICIA
+        const CATALOGO = [
+            { nombre: "Arroz integral cocido (100g)", calorias: 112 },
+            { nombre: "Arroz blanco cocido (100g)", calorias: 130 },
+            { nombre: "Avena en hojuelas (50g)", calorias: 194 },
+            { nombre: "Pan integral (1 rebanada)", calorias: 75 },
+            { nombre: "Pasta de trigo cocida (100g)", calorias: 131 },
+            { nombre: "Patata / Papa cocida (100g)", calorias: 87 },
+            { nombre: "Quinoa cocida (100g)", calorias: 120 },
+            { nombre: "Maíz dulce en grano (100g)", calorias: 86 },
+            { nombre: "Espinacas crudas (100g)", calorias: 23 },
+            { nombre: "Brócoli cocido (100g)", calorias: 35 },
+            { nombre: "Tomate crudo (100g)", calorias: 18 },
+            { nombre: "Zanahoria cruda (100g)", calorias: 41 },
+            { nombre: "Lechuga romana (100g)", calorias: 17 },
+            { nombre: "Manzana mediana (1 ud)", calorias: 52 },
+            { nombre: "Plátano / Banana (1 ud)", calorias: 89 },
+            { nombre: "Naranja mediana (1 ud)", calorias: 62 },
+            { nombre: "Fresas / Frutillas (100g)", calorias: 32 },
+            { nombre: "Kiwi (1 ud)", calorias: 61 },
+            { nombre: "Aguacate / Palta (100g)", calorias: 160 },
+            { nombre: "Leche entera (1 taza 240ml)", calorias: 149 },
+            { nombre: "Leche desnatada/descremada (240ml)", calorias: 83 },
+            { nombre: "Yogur natural entero (100g)", calorias: 61 },
+            { nombre: "Queso fresco tipo Burgos (100g)", calorias: 100 },
+            { nombre: "Queso Mozzarella (50g)", calorias: 140 },
+            { nombre: "Pechuga de Pollo a la plancha (100g)", calorias: 165 },
+            { nombre: "Carne de Res magra (100g)", calorias: 250 },
+            { nombre: "Filete de Cerdo (100g)", calorias: 143 },
+            { nombre: "Salmón a la plancha (100g)", calorias: 208 },
+            { nombre: "Atún en agua enlatado (100g)", calorias: 116 },
+            { nombre: "Huevo entero cocido (1 ud)", calorias: 78 },
+            { nombre: "Lentejas cocidas (100g)", calorias: 116 },
+            { nombre: "Garbanzos cocidos (100g)", calorias: 164 },
+            { nombre: "Aceite de Oliva (1 cucharada)", calorias: 119 },
+            { nombre: "Almendras (un puñado - 30g)", calorias: 173 },
+            { nombre: "Nueces (un puñado - 30g)", calorias: 196 },
+            { nombre: "Azúcar blanco (1 cucharadita)", calorias: 16 },
+            { nombre: "Chocolate negro 70% (20g)", calorias: 120 },
+            { nombre: "Galletas María (4 unidades)", calorias: 100 }
+        ];
+
+        let registros = JSON.parse(localStorage.getItem('nutrilog_v6_data')) || [];
+        let agua = parseInt(localStorage.getItem('nutrilog_v6_water')) || 0;
         let waterUnit = 'ml';
-        let perfil = JSON.parse(localStorage.getItem('nutrilog_v4_perfil')) || { nombre: '', peso: '', altura: '', semana: 'Azul' };
+        let perfil = JSON.parse(localStorage.getItem('nutrilog_v6_perfil')) || { nombre: '', peso: '', altura: '', semana: 'Azul' };
         let myChart = null;
 
         window.onload = () => {
@@ -265,7 +325,46 @@
             seleccionarSemana(perfil.semana || 'Azul');
             actualizarInterfaz();
             renderWaterDrops();
+
+            // Cerrar buscador al hacer click fuera
+            document.addEventListener('click', (e) => {
+                if(!e.target.closest('#alimento')) document.getElementById('search-results').classList.add('hidden');
+            });
         };
+
+        // --- LÓGICA DE BÚSQUEDA ---
+        function buscarCatalogo(query) {
+            const resultsDiv = document.getElementById('search-results');
+            if (query.length < 1) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const filtered = CATALOGO.filter(item => 
+                item.nombre.toLowerCase().includes(query.toLowerCase())
+            ).slice(0, 6);
+
+            if (filtered.length > 0) {
+                resultsDiv.innerHTML = filtered.map(item => `
+                    <div onclick="seleccionarCatalogo('${item.nombre}', ${item.calorias})" 
+                         class="p-4 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 flex justify-between items-center transition">
+                        <span class="font-semibold text-slate-700 text-sm">${item.nombre}</span>
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">${item.calorias} kcal</span>
+                    </div>
+                `).join('');
+                resultsDiv.classList.remove('hidden');
+            } else {
+                resultsDiv.classList.add('hidden');
+            }
+        }
+
+        function seleccionarCatalogo(nombre, calorias) {
+            document.getElementById('alimento').value = nombre;
+            document.getElementById('calorias').value = calorias;
+            document.getElementById('search-results').classList.add('hidden');
+            document.getElementById('cantidad-alimento').focus();
+            showToast("Alimento seleccionado del catálogo 🍎");
+        }
 
         // --- LÓGICA DE AGUA ---
         function setWaterUnit(unit) {
@@ -279,12 +378,9 @@
         function addWater() {
             let val = parseFloat(document.getElementById('water-input').value);
             if (isNaN(val) || val <= 0) { showToast("Ingresa una cantidad", "warning"); return; }
-            
-            // Convertir todo a ml para almacenamiento
             if (waterUnit === 'L') val = val * 1000;
-            
             agua += val;
-            localStorage.setItem('nutrilog_v4_water', agua);
+            localStorage.setItem('nutrilog_v6_water', agua);
             document.getElementById('water-input').value = "";
             actualizarInterfazAgua();
             renderWaterDrops();
@@ -294,90 +390,88 @@
         function renderWaterDrops() {
             const container = document.getElementById('water-drops-container');
             container.innerHTML = "";
-            // Una gota cada 250ml (8 gotas = 2L)
             const numDrops = Math.max(8, Math.ceil(agua / 250));
             const activeDrops = Math.floor(agua / 250);
-
             for (let i = 0; i < numDrops; i++) {
                 const drop = document.createElement('i');
-                drop.className = `fa-solid fa-droplet drop-icon ${i < activeDrops ? 'drop-active' : 'drop-empty'}`;
+                drop.className = `fa-solid fa-droplet drop-icon ${i < activeDrops ? 'drop-active' : 'drop-empty'} text-xl`;
                 container.appendChild(drop);
             }
         }
 
         function actualizarInterfazAgua() {
             const display = document.getElementById('water-current');
-            if (waterUnit === 'ml') {
-                display.innerText = agua;
-            } else {
-                display.innerText = (agua / 1000).toFixed(1);
-            }
+            display.innerText = waterUnit === 'ml' ? agua : (agua / 1000).toFixed(1);
         }
 
-        // --- LÓGICA DE PERFIL Y SEMANA ---
+        // --- PERFIL Y BIOMETRÍA ---
         function seleccionarSemana(color) {
             perfil.semana = color;
-            localStorage.setItem('nutrilog_v4_perfil', JSON.stringify(perfil));
+            localStorage.setItem('nutrilog_v6_perfil', JSON.stringify(perfil));
             document.querySelectorAll('.week-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`week-${color}`).classList.add('active');
-
-            const brandIcon = document.getElementById('brand-icon');
-            const brandBadge = document.getElementById('brand-badge');
-            const colors = {
-                'Azul': { bg: 'bg-blue-600', text: 'text-blue-600', b: 'bg-blue-50' },
-                'Rojo': { bg: 'bg-red-600', text: 'text-red-600', b: 'bg-red-50' },
-                'Yellow': { bg: 'bg-yellow-400', text: 'text-yellow-600', b: 'bg-yellow-50' },
-                'Black': { bg: 'bg-black', text: 'text-black', b: 'bg-slate-200' }
-            }[color];
-            brandIcon.className = `w-14 h-14 ${colors.bg} rounded-[1.25rem] flex items-center justify-center text-white text-2xl shadow-xl transition-all duration-500`;
-            brandBadge.className = `${colors.text} font-extrabold text-xs md:text-sm uppercase px-3 py-1 ${colors.b} rounded-full ml-1`;
+            
+            const colorMap = { 'Azul': '#3b82f6', 'Rojo': '#ef4444', 'Yellow': '#facc15', 'Black': '#000000' };
+            document.getElementById('brand-icon').style.backgroundColor = colorMap[color];
+            document.getElementById('brand-badge').style.color = colorMap[color];
         }
 
         function guardarPerfil() {
             perfil.nombre = document.getElementById('user-name').value;
             perfil.peso = document.getElementById('user-weight').value;
             perfil.altura = document.getElementById('user-height').value;
-            localStorage.setItem('nutrilog_v4_perfil', JSON.stringify(perfil));
-            calcularIMC();
+            localStorage.setItem('nutrilog_v6_perfil', JSON.stringify(perfil));
+            actualizarInterfaz();
         }
 
         function calcularIMC() {
-            const w = parseFloat(perfil.peso), h = parseFloat(perfil.altura) / 100;
+            const w = parseFloat(perfil.peso);
+            const h = parseFloat(perfil.altura) / 100;
             const badge = document.getElementById('bmi-badge');
             if (w > 0 && h > 0) {
                 const imc = (w / (h * h)).toFixed(1);
                 badge.innerText = `IMC: ${imc}`;
-                badge.className = "px-3 py-1 rounded-full bg-blue-600 text-white text-[10px] font-black shadow-lg shadow-blue-100";
+                badge.className = "px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black";
             }
         }
 
-        // --- LÓGICA DE ALIMENTOS ---
+        // --- GESTIÓN DE REGISTROS ---
         function agregarEntrada() {
             const n = document.getElementById('alimento').value;
             const k = parseInt(document.getElementById('calorias').value);
-            if (!n || isNaN(k)) { showToast("Faltan datos", "danger"); return; }
+            if (!n || isNaN(k)) { showToast("Alimento y calorías requeridos", "warning"); return; }
 
-            registros.push({
+            const entry = {
                 id: Date.now(),
-                nombre: n, kcal: k,
+                nombre: n,
+                kcal: k,
+                cantidad: document.getElementById('cantidad-alimento').value || 1,
+                unidad: document.getElementById('unidad-alimento').value,
                 prot: parseInt(document.getElementById('proteinas').value) || 0,
                 carb: parseInt(document.getElementById('carbs').value) || 0,
                 fat: parseInt(document.getElementById('grasas').value) || 0,
-                fecha: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})
-            });
+                fecha: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+            };
+
+            registros.push(entry);
             guardarYRefrescar();
-            document.querySelectorAll('input:not([onchange]):not(#water-input)').forEach(i => i.value = "");
-            showToast("Alimento guardado 🍎");
+            limpiarCampos();
+            showToast("Registro guardado con éxito ✨");
+        }
+
+        function limpiarCampos() {
+            ['alimento', 'calorias', 'proteinas', 'carbs', 'grasas', 'cantidad-alimento'].forEach(id => document.getElementById(id).value = "");
+            document.getElementById('alimento').focus();
         }
 
         function eliminarItem(id) {
             registros = registros.filter(r => r.id !== id);
             guardarYRefrescar();
-            showToast("Eliminado", "warning");
+            showToast("Registro eliminado", "danger");
         }
 
         function guardarYRefrescar() {
-            localStorage.setItem('nutrilog_v4_data', JSON.stringify(registros));
+            localStorage.setItem('nutrilog_v6_data', JSON.stringify(registros));
             actualizarInterfaz();
         }
 
@@ -387,117 +481,116 @@
             cuerpo.innerHTML = "";
             let totals = { kcal: 0, prot: 0, carb: 0, fat: 0 };
 
-            if (registros.length === 0) empty.classList.remove('hidden');
-            else {
+            if (registros.length === 0) {
+                empty.classList.remove('hidden');
+            } else {
                 empty.classList.add('hidden');
-                [...registros].reverse().forEach(item => {
-                    totals.kcal += item.kcal; totals.prot += item.prot;
-                    totals.carb += item.carb; totals.fat += item.fat;
+                [...registros].reverse().forEach(r => {
+                    totals.kcal += r.kcal; totals.prot += r.prot;
+                    totals.carb += r.carb; totals.fat += r.fat;
                     cuerpo.innerHTML += `
-                        <tr class="animate-entry hover:bg-slate-50/50 transition">
-                            <td class="px-8 py-5">
-                                <div class="font-bold text-slate-800 text-sm">${item.nombre}</div>
-                                <div class="text-[9px] text-slate-300 font-black uppercase">${item.fecha}</div>
+                        <tr class="animate-entry group">
+                            <td class="p-6">
+                                <div class="font-bold text-slate-800">${r.nombre}</div>
+                                <div class="text-[9px] text-slate-400 font-bold uppercase mt-1">
+                                    ${r.cantidad} ${r.unidad} • ${r.fecha}
+                                </div>
                             </td>
-                            <td class="px-4 py-5 text-center">
-                                <span class="font-black text-slate-600 text-lg">${item.kcal}</span>
-                                <span class="text-[9px] text-slate-300 font-bold block">KCAL</span>
+                            <td class="p-6 text-center">
+                                <span class="font-black text-slate-900">${r.kcal}</span>
+                                <span class="block text-[8px] text-slate-400 font-bold">KCAL</span>
                             </td>
-                            <td class="px-8 py-5 text-right">
-                                <button onclick="eliminarItem(${item.id})" class="text-slate-200 hover:text-red-500 transition"><i class="fa-solid fa-xmark"></i></button>
+                            <td class="p-6 text-right">
+                                <button onclick="eliminarItem(${r.id})" class="w-10 h-10 rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 transition-all">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
                             </td>
                         </tr>`;
                 });
             }
 
             document.getElementById('txt-progreso').innerText = totals.kcal;
-            const porc = Math.round((totals.kcal / 2000) * 100);
+            document.getElementById('items-count').innerText = `${registros.length} Registros`;
+            const porc = Math.min(100, Math.round((totals.kcal / 2000) * 100));
             document.getElementById('porcentaje').innerText = porc + "%";
-            document.getElementById('barra-progreso').style.width = Math.min(100, porc) + "%";
-            document.getElementById('items-count').innerText = `${registros.length} Items`;
-            
+            document.getElementById('barra-progreso').style.width = porc + "%";
+
             actualizarGrafico(totals.prot, totals.carb, totals.fat);
-            actualizarInterfazAgua();
-            renderWaterDrops();
+            calcularIMC();
         }
 
         function actualizarGrafico(p, c, g) {
             const ctx = document.getElementById('macroChart').getContext('2d');
-            const data = { datasets: [{ data: (p+c+g)>0 ? [p, c, g] : [1,1,1], backgroundColor: (p+c+g)>0 ? ['#10b981', '#f59e0b', '#f43f5e'] : ['#f8fafc','#f1f5f9','#f8fafc'], borderWidth: 0 }] };
+            const data = { datasets: [{ data: [p||1, c||1, g||1], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0, hoverOffset: 4 }] };
             if (myChart) { myChart.data = data; myChart.update(); }
-            else { myChart = new Chart(ctx, { type: 'doughnut', data, options: { cutout: '75%', plugins: { legend: { display: false } } } }); }
+            else { myChart = new Chart(ctx, { type: 'doughnut', data: data, options: { cutout: '75%', plugins: { legend: { display: false } } } }); }
         }
 
-        function compartirReporte() {
-            if (registros.length === 0 && agua === 0) { showToast("Sin datos para compartir", "warning"); return; }
-            let totals = { k:0, p:0, c:0, g:0 }, list = "";
-            registros.forEach(r => {
-                totals.k += r.kcal; totals.p += r.prot; totals.c += r.carb; totals.g += r.fat;
-                list += `• ${r.nombre}: ${r.kcal} kcal (${r.prot}P/${r.carb}C/${r.fat}G)\n`;
-            });
-
-            const now = new Date();
-            const emojiMap = { 'Azul': '🟦', 'Rojo': '🟥', 'Yellow': '🟨', 'Black': '⬛' };
-            const msg = `🍎 *NutriLog Pro Report* 🍎
-👤 *Usuario:* ${perfil.nombre || 'Invitado'}
-📍 *Fase:* ${emojiMap[perfil.semana]} SEMANA ${perfil.semana.toUpperCase()}
-📅 ${now.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}
-🕒 ${now.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })}
-
-🔥 *CALORÍAS:* ${totals.k} / 2000 kcal
-🥩 P: ${totals.p}g | 🍞 C: ${totals.c}g | 🥑 G: ${totals.g}g
-💧 *AGUA:* ${(agua/1000).toFixed(2)} Litros
-
-📝 *DETALLE:*
-${list}
-_Generado con NutriLog Pro_ 🚀`;
-
-            const el = document.createElement('textarea');
-            el.value = msg; document.body.appendChild(el); el.select();
-            document.execCommand('copy'); document.body.removeChild(el);
-            showToast("Reporte copiado para WhatsApp 📋");
-        }
-
+        // --- IMPORTACIÓN Y COMPARTIR ---
         function abrirImportModal() { document.getElementById('import-modal').classList.remove('hidden'); }
         function closeImportModal() { document.getElementById('import-modal').classList.add('hidden'); }
-        
+
         function procesarTextoImportado() {
             const texto = document.getElementById('import-text').value;
-            const regex = /(?:•|[*])?\s*(.*?):\s*(\d+)\s*kcal\s*\((\d+)P\/(\d+)C\/(\d+)G\)/gi;
-            const waterRegex = /💧\s*AGUA:\s*([\d.]+)\s*Litros/i;
-            
+            const regex = /•\s*(.*?):\s*(\d+)\s*kcal/gi;
             let match, count = 0;
             while ((match = regex.exec(texto)) !== null) {
                 registros.push({
                     id: Date.now() + count,
-                    nombre: match[1].trim(), kcal: parseInt(match[2]),
-                    prot: parseInt(match[3]), carb: parseInt(match[4]), fat: parseInt(match[5]),
-                    fecha: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})
+                    nombre: match[1].trim(),
+                    kcal: parseInt(match[2]),
+                    cantidad: 1, unidad: "Unidad", prot: 0, carb: 0, fat: 0,
+                    fecha: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
                 });
                 count++;
             }
+            if (count > 0) { guardarYRefrescar(); closeImportModal(); showToast(`${count} registros importados 🚀`); }
+            else showToast("No se detectó el formato", "warning");
+        }
 
-            const waterMatch = waterRegex.exec(texto);
-            if (waterMatch) {
-                agua = parseFloat(waterMatch[1]) * 1000;
-                localStorage.setItem('nutrilog_v4_water', agua);
-            }
+        function compartirReporte() {
+            if (registros.length === 0) { showToast("No hay datos hoy", "warning"); return; }
+            
+            const now = new Date();
+            const fStr = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            const hStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            
+            let t = { k:0, p:0, c:0, g:0 }, list = "";
+            registros.forEach(r => {
+                t.k += r.kcal; t.p += r.prot; t.c += r.carb; t.g += r.fat;
+                list += `• ${r.nombre}: ${r.kcal} kcal (${r.cantidad} ${r.unidad})\n`;
+            });
 
-            if (count > 0 || waterMatch) {
-                guardarYRefrescar();
-                closeImportModal();
-                showToast(`¡Importación exitosa!`);
-            } else { showToast("Formato no válido", "danger"); }
+            const msg = `🍎 *NutriLog Pro - Reporte* 🍎
+👤 *Usuario:* ${perfil.nombre || 'Sin nombre'}
+🎨 *Semana:* ${perfil.semana}
+📅 ${fStr.toUpperCase()}
+🕒 ${hStr}
+
+🔥 *Energía:* ${t.k} / 2000 kcal
+🥩 Prot: ${t.p}g | 🍞 Carb: ${t.c}g | 🥑 Gras: ${t.g}g
+💧 *Agua:* ${(agua/1000).toFixed(1)} Litros
+
+📝 *Detalle:*
+${list}
+_Enviado desde mi Bio-Dashboard_ 🚀`;
+
+            const el = document.createElement('textarea');
+            el.value = msg; document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
+            showToast("Reporte con fecha/hora copiado ✅");
         }
 
         function solicitarLimpieza() {
             document.getElementById('confirm-modal').classList.remove('hidden');
             document.getElementById('modal-confirm-btn').onclick = () => {
                 registros = []; agua = 0;
-                localStorage.setItem('nutrilog_v4_water', 0);
+                localStorage.removeItem('nutrilog_v6_data');
+                localStorage.removeItem('nutrilog_v6_water');
                 guardarYRefrescar();
-                document.getElementById('confirm-modal').classList.add('hidden');
-                showToast("Datos borrados", "danger");
+                renderWaterDrops();
+                closeConfirmModal();
+                showToast("Día reiniciado con éxito", "danger");
             };
         }
         function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
@@ -505,11 +598,11 @@ _Generado con NutriLog Pro_ 🚀`;
         function showToast(msg, type = "success") {
             const container = document.getElementById('toast-container');
             const t = document.createElement('div');
-            const colors = { success: 'bg-slate-900', danger: 'bg-red-500', warning: 'bg-amber-500' };
-            t.className = `${colors[type]} text-white px-6 py-4 rounded-2xl shadow-2xl font-bold text-xs animate-entry flex items-center justify-between gap-4 border border-white/10`;
-            t.innerHTML = `<span>${msg}</span><i class="fa-solid fa-check-circle opacity-50"></i>`;
+            const colors = { success: 'bg-slate-900', warning: 'bg-amber-500', danger: 'bg-red-500' };
+            t.className = `${colors[type]} text-white px-8 py-4 rounded-2xl shadow-2xl font-bold text-xs animate-entry flex items-center gap-3 border border-white/10`;
+            t.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-circle-exclamation'}"></i> ${msg.toUpperCase()}`;
             container.appendChild(t);
-            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
+            setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(-10px)'; setTimeout(() => t.remove(), 400); }, 3000);
         }
     </script>
 </body>
